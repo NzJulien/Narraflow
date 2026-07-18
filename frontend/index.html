@@ -1190,6 +1190,11 @@ async function handleEvent(event){
     case 'motion':
       renderMotion(event.scene, event.motion);
       break;
+    case 'error':
+      // Terminal error event from the SSE stream (see main.py). The stream
+      // is over; surface it and let runLive's caller fall back to demo mode.
+      logLine(`Pipeline error — ${event.message || 'the backend stopped unexpectedly'}`);
+      throw new Error(event.message || 'story stream error');
     case 'done':
       stopTimer(event.total_ms);
       logLine(`Pipeline complete — total ${event.total_ms}ms across ${totalScenes} scenes`);

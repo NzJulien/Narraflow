@@ -20,8 +20,11 @@ takes a scene down - the frontend already handles a null image cleanly.
 """
 
 import base64
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 ARTIST_BACKEND = os.environ.get("ARTIST_BACKEND", "mock").strip().lower()
 FIREWORKS_IMAGE_MODEL = os.environ.get(
@@ -31,7 +34,7 @@ FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks
 _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
 
 if ARTIST_BACKEND == "fireworks" and not _api_key:
-    print("[artist] FIREWORKS_API_KEY not set; falling back to mock (no images).")
+    logger.warning("FIREWORKS_API_KEY not set; falling back to mock (no images).")
     ARTIST_BACKEND = "mock"
 
 
@@ -56,6 +59,6 @@ def generate_image(prompt: str) -> Optional[str]:
         resp.raise_for_status()
         encoded = base64.b64encode(resp.content).decode("ascii")
         return f"data:image/png;base64,{encoded}"
-    except Exception as exc:  # noqa: BLE001 - image gen must never kill a scene
-        print(f"[artist] Fireworks image call failed ({exc}); scene will have no image.")
+    except Exception:  # noqa: BLE001 - image gen must never kill a scene
+        logger.warning("Fireworks image call failed; scene will have no image.", exc_info=True)
         return None

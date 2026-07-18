@@ -22,8 +22,11 @@ contract as the rest of the pipeline: never raises.
 
 import hashlib
 import json
+import logging
 import os
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 DIRECTOR_BACKEND = os.environ.get("DIRECTOR_BACKEND", "mock").strip().lower()
 FIREWORKS_TEXT_MODEL = os.environ.get(
@@ -33,7 +36,7 @@ FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks
 _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
 
 if DIRECTOR_BACKEND == "fireworks" and not _api_key:
-    print("[director] FIREWORKS_API_KEY not set; falling back to mock planning.")
+    logger.warning("FIREWORKS_API_KEY not set; falling back to mock planning.")
     DIRECTOR_BACKEND = "mock"
 
 BASE_ARC = ["setup", "rising", "twist", "climax", "resolution"]
@@ -90,6 +93,6 @@ def plan_story(idea: str, scene_count: int = 5) -> dict:
     if DIRECTOR_BACKEND == "fireworks":
         try:
             return _fireworks_plan(idea, scene_count)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[director] Fireworks planning failed ({exc}); using local plan.")
+        except Exception:  # noqa: BLE001
+            logger.warning("Fireworks planning failed; using local plan.", exc_info=True)
     return _local_plan(idea, scene_count)

@@ -27,8 +27,11 @@ arriving live instead of waiting for a whole scene to land at once.
 """
 
 import hashlib
+import logging
 import os
 from typing import Iterator, Tuple
+
+logger = logging.getLogger(__name__)
 
 BACKEND_MODE = os.environ.get("WRITER_BACKEND", "mock").strip().lower()
 MODEL_NAME = os.environ.get("VLLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
@@ -40,7 +43,7 @@ VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8001/v1")
 _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
 
 if BACKEND_MODE == "fireworks" and not _api_key:
-    print("[writer] FIREWORKS_API_KEY not set; falling back to mock.")
+    logger.warning("FIREWORKS_API_KEY not set; falling back to mock.")
     BACKEND_MODE = "mock"
 
 NAME_POOL = ["Amara", "Kofi", "Sena", "Idris", "Naledi", "Mateo", "Lin", "Priya", "Tomas", "Yuki"]
@@ -121,14 +124,14 @@ def write_scene(context: dict) -> dict:
                 {"Authorization": f"Bearer {_api_key}", "Content-Type": "application/json"},
             )
             return _extract_scene_fields(text, context)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[writer] Fireworks call failed ({exc}); using mock text.")
+        except Exception:  # noqa: BLE001
+            logger.warning("Fireworks call failed; using mock text.", exc_info=True)
     elif BACKEND_MODE == "vllm":
         try:
             text = _chat_completion(context, VLLM_BASE_URL, MODEL_NAME, {"Content-Type": "application/json"})
             return _extract_scene_fields(text, context)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[writer] vLLM call failed ({exc}); using mock text.")
+        except Exception:  # noqa: BLE001
+            logger.warning("vLLM call failed; using mock text.", exc_info=True)
     return _extract_scene_fields(_mock_text(context), context)
 
 
