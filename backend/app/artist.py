@@ -23,16 +23,18 @@ import base64
 import os
 from typing import Optional
 
-ARTIST_BACKEND = os.environ.get("ARTIST_BACKEND", "mock").strip().lower()
+from . import common
+
 FIREWORKS_IMAGE_MODEL = os.environ.get(
     "FIREWORKS_IMAGE_MODEL", "accounts/fireworks/models/flux-1-schnell-fp8"
 )
-FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
-_api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-
-if ARTIST_BACKEND == "fireworks" and not _api_key:
-    print("[artist] FIREWORKS_API_KEY not set; falling back to mock (no images).")
-    ARTIST_BACKEND = "mock"
+ARTIST_BACKEND, _api_key = common.resolve_backend(
+    "artist",
+    os.environ.get("ARTIST_BACKEND", "mock").strip().lower(),
+    remote="fireworks",
+    fallback="mock",
+    missing_msg="FIREWORKS_API_KEY not set; falling back to mock (no images).",
+)
 
 
 def generate_image(prompt: str) -> Optional[str]:
@@ -45,11 +47,11 @@ def generate_image(prompt: str) -> Optional[str]:
 
     import requests
 
-    url = f"{FIREWORKS_BASE_URL}/workflows/{FIREWORKS_IMAGE_MODEL}/text_to_image"
+    url = f"{common.FIREWORKS_BASE_URL}/workflows/{FIREWORKS_IMAGE_MODEL}/text_to_image"
     try:
         resp = requests.post(
             url,
-            headers={"Authorization": f"Bearer {_api_key}", "Content-Type": "application/json"},
+            headers=common.auth_headers(_api_key),
             json={"prompt": prompt, "width": 1024, "height": 576, "steps": 4},
             timeout=45,
         )

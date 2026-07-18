@@ -42,28 +42,25 @@ duration/zoom; for fireworks it's folded into the video prompt.
 """
 
 import base64
-import hashlib
 import os
 from typing import Optional
 
-CINEMATOGRAPHER_BACKEND = os.environ.get("CINEMATOGRAPHER_BACKEND", "kenburns").strip().lower()
+from . import common
+
 FIREWORKS_VIDEO_MODEL = os.environ.get("FIREWORKS_VIDEO_MODEL", "").strip()
-FIREWORKS_BASE_URL = os.environ.get(
-    "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1"
+
+CINEMATOGRAPHER_BACKEND, _api_key = common.resolve_backend(
+    "cinematographer",
+    os.environ.get("CINEMATOGRAPHER_BACKEND", "kenburns").strip().lower(),
+    remote="fireworks",
+    fallback="kenburns",
+    extra_ready=bool(FIREWORKS_VIDEO_MODEL),
+    missing_msg=(
+        "FIREWORKS_VIDEO_MODEL not set (Fireworks has no "
+        "video model yet); falling back to kenburns."
+    ),
+    ready_msg=f"Fireworks video backend ready: {FIREWORKS_VIDEO_MODEL}",
 )
-
-_api_key: Optional[str] = None
-
-if CINEMATOGRAPHER_BACKEND == "fireworks":
-    _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-    if not _api_key or not FIREWORKS_VIDEO_MODEL:
-        print(
-            "[cinematographer] FIREWORKS_VIDEO_MODEL not set (Fireworks has no "
-            "video model yet); falling back to kenburns."
-        )
-        CINEMATOGRAPHER_BACKEND = "kenburns"
-    else:
-        print(f"[cinematographer] Fireworks video backend ready: {FIREWORKS_VIDEO_MODEL}")
 
 # Varied per scene so a 5-scene story doesn't repeat the same pan twice.
 PAN_DIRECTIONS = [
@@ -81,8 +78,7 @@ CAMERA_STYLE_ADJUST = {
 }
 
 
-def _log(msg: str) -> None:
-    print(f"[cinematographer] {msg}")
+_log = common.make_logger("cinematographer")
 
 
 def _kenburns_spec(scene_number: int, pacing: str, image_prompt: str, camera_style: Optional[str] = None) -> dict:
@@ -93,7 +89,7 @@ def _kenburns_spec(scene_number: int, pacing: str, image_prompt: str, camera_sty
     resolution eases back out slower. camera_style layers a further
     adjustment on top.
     """
-    seed = int(hashlib.sha1(f"{scene_number}:{image_prompt}".encode()).hexdigest(), 16)
+    seed = common.seed_from(scene_number, image_prompt)
     direction = PAN_DIRECTIONS[seed % len(PAN_DIRECTIONS)]
 
     if pacing == "climax":
@@ -129,14 +125,11 @@ def _fireworks_video(image_data_uri: str, prompt: str, duration_ms: int) -> Opti
     """
     import requests
 
-    url = f"{FIREWORKS_BASE_URL}/workflows/{FIREWORKS_VIDEO_MODEL}/image_to_video"
+    url = f"{common.FIREWORKS_BASE_URL}/workflows/{FIREWORKS_VIDEO_MODEL}/image_to_video"
     try:
         response = requests.post(
             url,
-            headers={
-                "Authorization": f"Bearer {_api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=common.auth_headers(_api_key),
             json={"image": image_data_uri, "prompt": prompt, "duration_ms": duration_ms},
             timeout=60,
         )

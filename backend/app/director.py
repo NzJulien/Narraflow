@@ -20,21 +20,22 @@ default "mock" is a deterministic local planner. Same defensive
 contract as the rest of the pipeline: never raises.
 """
 
-import hashlib
 import json
 import os
 from typing import List
 
-DIRECTOR_BACKEND = os.environ.get("DIRECTOR_BACKEND", "mock").strip().lower()
+from . import common
+
 FIREWORKS_TEXT_MODEL = os.environ.get(
     "FIREWORKS_TEXT_MODEL", "accounts/fireworks/models/llama-v3p1-70b-instruct"
 )
-FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
-_api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-
-if DIRECTOR_BACKEND == "fireworks" and not _api_key:
-    print("[director] FIREWORKS_API_KEY not set; falling back to mock planning.")
-    DIRECTOR_BACKEND = "mock"
+DIRECTOR_BACKEND, _api_key = common.resolve_backend(
+    "director",
+    os.environ.get("DIRECTOR_BACKEND", "mock").strip().lower(),
+    remote="fireworks",
+    fallback="mock",
+    missing_msg="FIREWORKS_API_KEY not set; falling back to mock planning.",
+)
 
 BASE_ARC = ["setup", "rising", "twist", "climax", "resolution"]
 GENRES = ["Adventure", "Mystery", "Sci-Fi", "Fantasy", "Drama"]
@@ -49,7 +50,7 @@ def _fallback_arc(scene_count: int) -> List[str]:
 
 
 def _local_plan(idea: str, scene_count: int) -> dict:
-    seed = int(hashlib.sha1(idea.encode()).hexdigest(), 16)
+    seed = common.seed_from(idea)
     title = idea.strip().split(".")[0][:60] or "Untitled Story"
     return {
         "title": title,
@@ -70,8 +71,8 @@ def _fireworks_plan(idea: str, scene_count: int) -> dict:
         f"Idea: {idea}"
     )
     resp = requests.post(
-        f"{FIREWORKS_BASE_URL}/chat/completions",
-        headers={"Authorization": f"Bearer {_api_key}", "Content-Type": "application/json"},
+        f"{common.FIREWORKS_BASE_URL}/chat/completions",
+        headers=common.auth_headers(_api_key),
         json={"model": FIREWORKS_TEXT_MODEL, "max_tokens": 300,
               "messages": [{"role": "user", "content": prompt}]},
         timeout=30,

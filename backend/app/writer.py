@@ -26,22 +26,23 @@ returns - so the streaming SSE path in orchestrator.py can show prose
 arriving live instead of waiting for a whole scene to land at once.
 """
 
-import hashlib
 import os
 from typing import Iterator, Tuple
 
-BACKEND_MODE = os.environ.get("WRITER_BACKEND", "mock").strip().lower()
+from . import common
+
 MODEL_NAME = os.environ.get("VLLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
 FIREWORKS_MODEL = os.environ.get(
     "FIREWORKS_TEXT_MODEL", "accounts/fireworks/models/llama-v3p1-70b-instruct"
 )
-FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1")
 VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8001/v1")
-_api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-
-if BACKEND_MODE == "fireworks" and not _api_key:
-    print("[writer] FIREWORKS_API_KEY not set; falling back to mock.")
-    BACKEND_MODE = "mock"
+BACKEND_MODE, _api_key = common.resolve_backend(
+    "writer",
+    os.environ.get("WRITER_BACKEND", "mock").strip().lower(),
+    remote="fireworks",
+    fallback="mock",
+    missing_msg="FIREWORKS_API_KEY not set; falling back to mock.",
+)
 
 NAME_POOL = ["Amara", "Kofi", "Sena", "Idris", "Naledi", "Mateo", "Lin", "Priya", "Tomas", "Yuki"]
 LOCATION_WORDS = ["the ridge", "the old market", "the harbor", "the forest edge", "the workshop"]
@@ -55,7 +56,7 @@ def _clean_idea(idea: str) -> str:
 
 def _mock_text(context: dict) -> str:
     idea, pacing, i = context["idea"], context["pacing"], context["scene_number"]
-    seed = int(hashlib.sha1(f"{idea}:{i}".encode()).hexdigest(), 16)
+    seed = common.seed_from(idea, i)
     name = NAME_POOL[seed % len(NAME_POOL)]
     place = LOCATION_WORDS[seed % len(LOCATION_WORDS)]
     beat = {
@@ -70,7 +71,7 @@ def _mock_text(context: dict) -> str:
 
 def _extract_scene_fields(text: str, context: dict) -> dict:
     i, pacing = context["scene_number"], context["pacing"]
-    seed = int(hashlib.sha1(f"{context['idea']}:{i}".encode()).hexdigest(), 16)
+    seed = common.seed_from(context["idea"], i)
     world = context.get("world", {"characters": [], "locations": []})
     name = NAME_POOL[seed % len(NAME_POOL)]
     place = LOCATION_WORDS[seed % len(LOCATION_WORDS)]
@@ -117,15 +118,15 @@ def write_scene(context: dict) -> dict:
     if BACKEND_MODE == "fireworks":
         try:
             text = _chat_completion(
-                context, FIREWORKS_BASE_URL, FIREWORKS_MODEL,
-                {"Authorization": f"Bearer {_api_key}", "Content-Type": "application/json"},
+                context, common.FIREWORKS_BASE_URL, FIREWORKS_MODEL,
+                common.auth_headers(_api_key),
             )
             return _extract_scene_fields(text, context)
         except Exception as exc:  # noqa: BLE001
             print(f"[writer] Fireworks call failed ({exc}); using mock text.")
     elif BACKEND_MODE == "vllm":
         try:
-            text = _chat_completion(context, VLLM_BASE_URL, MODEL_NAME, {"Content-Type": "application/json"})
+            text = _chat_completion(context, VLLM_BASE_URL, MODEL_NAME, common.auth_headers())
             return _extract_scene_fields(text, context)
         except Exception as exc:  # noqa: BLE001
             print(f"[writer] vLLM call failed ({exc}); using mock text.")
