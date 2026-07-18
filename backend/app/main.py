@@ -20,24 +20,34 @@ Web Speech API support, and a scene-level image retry endpoint.
 """
 
 import json
+import os
 from typing import Optional
 
 from fastapi import FastAPI, File, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import artist, cinematographer, voice, writer
 from .orchestrator import generate_story, generate_story_stream
 
 app = FastAPI(title="NarraFlow")
 
+# Restrict cross-origin access to an explicit allow-list. The frontend is
+# served same-origin from /app, so it needs no CORS grant at all; the
+# defaults just cover the file:// / localhost dev flow documented in the
+# README. Override with CORS_ALLOW_ORIGINS (comma-separated) for other
+# deployments. A literal "*" is still supported for local demos but is
+# opt-in rather than the default.
+_default_origins = "http://localhost:8000,http://127.0.0.1:8000"
+_origins = [o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", _default_origins).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_origins,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -57,13 +67,13 @@ def status():
 
 @app.get("/story")
 def story(
-    idea: str = Query(...),
+    idea: str = Query(..., min_length=1, max_length=2000),
     scenes: int = Query(5, ge=1, le=12),
-    genre: Optional[str] = Query(None),
-    tone: Optional[str] = Query(None),
-    length: Optional[str] = Query(None),
-    image_style: Optional[str] = Query(None),
-    camera_style: Optional[str] = Query(None),
+    genre: Optional[str] = Query(None, max_length=100),
+    tone: Optional[str] = Query(None, max_length=100),
+    length: Optional[str] = Query(None, max_length=100),
+    image_style: Optional[str] = Query(None, max_length=100),
+    camera_style: Optional[str] = Query(None, max_length=100),
 ):
     """Non-streaming: full story, images, and motion specs in one response."""
     return generate_story(
@@ -74,13 +84,13 @@ def story(
 
 @app.get("/story/stream")
 def story_stream(
-    idea: str = Query(...),
+    idea: str = Query(..., min_length=1, max_length=2000),
     scenes: int = Query(5, ge=1, le=12),
-    genre: Optional[str] = Query(None),
-    tone: Optional[str] = Query(None),
-    length: Optional[str] = Query(None),
-    image_style: Optional[str] = Query(None),
-    camera_style: Optional[str] = Query(None),
+    genre: Optional[str] = Query(None, max_length=100),
+    tone: Optional[str] = Query(None, max_length=100),
+    length: Optional[str] = Query(None, max_length=100),
+    image_style: Optional[str] = Query(None, max_length=100),
+    camera_style: Optional[str] = Query(None, max_length=100),
 ):
     """
     SSE endpoint - yields `data: {...}\\n\\n` events as the pipeline
@@ -116,7 +126,7 @@ async def transcribe(file: UploadFile = File(...)) -> dict:
 
 
 class RegenerateImageRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=2000)
 
 
 @app.post("/scene/regenerate-image")
