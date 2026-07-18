@@ -20,6 +20,7 @@ Web Speech API support, and a scene-level image retry endpoint.
 """
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import FastAPI, File, Query, UploadFile
@@ -30,6 +31,8 @@ from pydantic import BaseModel
 
 from . import artist, cinematographer, voice, writer
 from .orchestrator import generate_story, generate_story_stream
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="NarraFlow")
 
@@ -89,11 +92,24 @@ def story_stream(
     events) -> done. Matches the parser in index.html's runLive().
     """
     def event_source():
-        for event in generate_story_stream(
-            idea, scenes, genre=genre, tone=tone, length=length,
-            image_style=image_style, camera_style=camera_style,
-        ):
-            yield f"data: {json.dumps(event)}\n\n"
+        try:
+            for event in generate_story_stream(
+                idea, scenes, genre=genre, tone=tone, length=length,
+                image_style=image_style, camera_style=camera_style,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception:  # noqa: BLE001
+            # The stream has already returned 200 and started emitting
+            # events, so we can't surface a normal HTTP error. Instead of
+            # letting the connection die silently mid-story (which leaves
+            # the client stalled with no signal), emit a terminal `error`
+            # event so the frontend can fall back to local demo mode.
+            logger.exception("Story stream failed mid-generation")
+            error_event = {
+                "type": "error",
+                "message": "The story pipeline hit an unexpected error and stopped.",
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
 
     return StreamingResponse(event_source(), media_type="text/event-stream")
 
@@ -132,6 +148,7 @@ def regenerate_image(req: RegenerateImageRequest) -> dict:
     try:
         image = artist.generate_image(req.prompt)
     except Exception:  # noqa: BLE001 - retry must never itself crash
+        logger.warning("Image retry failed; returning null image.", exc_info=True)
         image = None
     return {"image": image}
 

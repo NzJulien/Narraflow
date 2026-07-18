@@ -35,8 +35,11 @@ returning None instead of raising. A flaky transcription should send the
 person back to typing, never crash the request.
 """
 
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 VOICE_BACKEND = os.environ.get("VOICE_BACKEND", "mock").strip().lower()
 FIREWORKS_AUDIO_MODEL = os.environ.get("FIREWORKS_AUDIO_MODEL", "whisper-v3")
@@ -49,14 +52,14 @@ _api_key: Optional[str] = None
 if VOICE_BACKEND == "fireworks":
     _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
     if not _api_key:
-        print("[voice] FIREWORKS_API_KEY not set; falling back to mock (no server-side transcription).")
+        logger.warning("FIREWORKS_API_KEY not set; falling back to mock (no server-side transcription).")
         VOICE_BACKEND = "mock"
     else:
-        print(f"[voice] Fireworks Whisper backend ready: {FIREWORKS_AUDIO_MODEL}")
+        logger.info("Fireworks Whisper backend ready: %s", FIREWORKS_AUDIO_MODEL)
 
 
 def _log(msg: str) -> None:
-    print(f"[voice] {msg}")
+    logger.info(msg)
 
 
 def transcribe(audio_bytes: bytes, filename: str = "clip.webm") -> Optional[str]:
@@ -88,6 +91,6 @@ def transcribe(audio_bytes: bytes, filename: str = "clip.webm") -> Optional[str]
         data = response.json()
         text = (data.get("text") or "").strip()
         return text or None
-    except Exception as exc:  # noqa: BLE001 - transcription must never kill the request
-        _log(f"transcription failed ({exc}); frontend should fall back to typing.")
+    except Exception:  # noqa: BLE001 - transcription must never kill the request
+        logger.warning("transcription failed; frontend should fall back to typing.", exc_info=True)
         return None

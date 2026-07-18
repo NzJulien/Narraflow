@@ -44,6 +44,7 @@ a single scene, or the Artist or Cinematographer call fails, the story
 keeps going instead of taking the whole demo down with it.
 """
 
+import logging
 import time
 import uuid
 from typing import Iterator, Optional
@@ -52,6 +53,8 @@ from . import artist, cinematographer
 from .director import plan_story
 from .memory import get_world, new_world, update_memory
 from .writer import write_scene, write_scene_stream
+
+logger = logging.getLogger(__name__)
 
 FALLBACK_TEXT = (
     "The story pauses for a breath here - the Writer agent hit a "
@@ -78,8 +81,10 @@ def _fallback_scene(context: dict) -> dict:
 def _safe_write_scene(context: dict) -> dict:
     try:
         return write_scene(context)
-    except Exception as exc:  # noqa: BLE001 - never let one scene kill the story
-        print(f"[orchestrator] scene {context['scene_number'] + 1} failed ({exc}); using a fallback line.")
+    except Exception:  # noqa: BLE001 - never let one scene kill the story
+        logger.warning(
+            "scene %s failed; using a fallback line.", context["scene_number"] + 1, exc_info=True
+        )
         return _fallback_scene(context)
 
 
@@ -89,8 +94,12 @@ def _safe_write_scene_stream(context: dict) -> Iterator[tuple]:
     token + fallback scene if the Writer backend raises mid-stream."""
     try:
         yield from write_scene_stream(context)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[orchestrator] scene {context['scene_number'] + 1} streaming failed ({exc}); using a fallback line.")
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "scene %s streaming failed; using a fallback line.",
+            context["scene_number"] + 1,
+            exc_info=True,
+        )
         fallback = _fallback_scene(context)
         yield "token", fallback["text"]
         yield "done", fallback
@@ -99,16 +108,16 @@ def _safe_write_scene_stream(context: dict) -> Iterator[tuple]:
 def _safe_generate_image(prompt: str):
     try:
         return artist.generate_image(prompt)
-    except Exception as exc:  # noqa: BLE001 - never let a bad image call kill the story
-        print(f"[orchestrator] image generation failed ({exc}); scene will have no image.")
+    except Exception:  # noqa: BLE001 - never let a bad image call kill the story
+        logger.warning("image generation failed; scene will have no image.", exc_info=True)
         return None
 
 
 def _safe_animate_scene(scene_number: int, pacing: str, image_prompt: str, image, camera_style: Optional[str] = None):
     try:
         return cinematographer.animate_scene(scene_number, pacing, image_prompt, image, camera_style=camera_style)
-    except Exception as exc:  # noqa: BLE001 - never let a bad motion call kill the story
-        print(f"[orchestrator] cinematography failed ({exc}); scene will render as a still.")
+    except Exception:  # noqa: BLE001 - never let a bad motion call kill the story
+        logger.warning("cinematography failed; scene will render as a still.", exc_info=True)
         return None
 
 
@@ -239,6 +248,12 @@ def generate_story_stream(
                 yield {"type": "scene_token", "story_id": story_id, "scene": i + 1, "token": payload}
             else:
                 scene = payload
+        if scene is None:
+            # _safe_write_scene_stream always yields a final ("done", scene),
+            # but guard so a contract violation degrades to a fallback scene
+            # instead of raising a TypeError that would kill the whole stream.
+            logger.warning("scene %s produced no final scene payload; using a fallback.", i + 1)
+            scene = _fallback_scene({"idea": styled_idea, "scene_number": i, "pacing": pacing})
         yield {"type": "timing", "story_id": story_id, "agent": "writer", "scene": scene["scene"],
                "ms": round((time.perf_counter() - t0) * 1000)}
 

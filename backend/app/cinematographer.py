@@ -43,8 +43,11 @@ duration/zoom; for fireworks it's folded into the video prompt.
 
 import base64
 import hashlib
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 CINEMATOGRAPHER_BACKEND = os.environ.get("CINEMATOGRAPHER_BACKEND", "kenburns").strip().lower()
 FIREWORKS_VIDEO_MODEL = os.environ.get("FIREWORKS_VIDEO_MODEL", "").strip()
@@ -57,13 +60,13 @@ _api_key: Optional[str] = None
 if CINEMATOGRAPHER_BACKEND == "fireworks":
     _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
     if not _api_key or not FIREWORKS_VIDEO_MODEL:
-        print(
-            "[cinematographer] FIREWORKS_VIDEO_MODEL not set (Fireworks has no "
-            "video model yet); falling back to kenburns."
+        logger.warning(
+            "FIREWORKS_VIDEO_MODEL not set (Fireworks has no video model yet); "
+            "falling back to kenburns."
         )
         CINEMATOGRAPHER_BACKEND = "kenburns"
     else:
-        print(f"[cinematographer] Fireworks video backend ready: {FIREWORKS_VIDEO_MODEL}")
+        logger.info("Fireworks video backend ready: %s", FIREWORKS_VIDEO_MODEL)
 
 # Varied per scene so a 5-scene story doesn't repeat the same pan twice.
 PAN_DIRECTIONS = [
@@ -82,7 +85,7 @@ CAMERA_STYLE_ADJUST = {
 
 
 def _log(msg: str) -> None:
-    print(f"[cinematographer] {msg}")
+    logger.info(msg)
 
 
 def _kenburns_spec(scene_number: int, pacing: str, image_prompt: str, camera_style: Optional[str] = None) -> dict:
@@ -143,8 +146,11 @@ def _fireworks_video(image_data_uri: str, prompt: str, duration_ms: int) -> Opti
         response.raise_for_status()
         encoded = base64.b64encode(response.content).decode("ascii")
         return {"backend": "fireworks", "video": f"data:video/mp4;base64,{encoded}"}
-    except Exception as exc:  # noqa: BLE001 - video gen must never kill a scene
-        _log(f"Fireworks video call failed ({exc}); falling back to kenburns for this scene.")
+    except Exception:  # noqa: BLE001 - video gen must never kill a scene
+        logger.warning(
+            "Fireworks video call failed; falling back to kenburns for this scene.",
+            exc_info=True,
+        )
         return None
 
 
