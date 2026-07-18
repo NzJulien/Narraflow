@@ -584,6 +584,17 @@ function updateStats(finalMs){
   statsBarEl.classList.add('show');
 }
 
+// Escapes text before it's interpolated into an innerHTML template, so
+// user-supplied ideas and model output can't inject markup/script.
+function escapeHtml(value){
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function logLine(text){
   eventCount++;
   const el = document.createElement('div');
@@ -630,7 +641,7 @@ async function checkBackend(){
     extras.forEach(e => {
       const b = document.createElement('div');
       b.className = `badge ${e.cls}`;
-      b.innerHTML = `<span class="dot"></span><span>${e.text}</span>`;
+      b.innerHTML = `<span class="dot"></span><span>${escapeHtml(e.text)}</span>`;
       badgeRow.appendChild(b);
     });
   } catch (err) {
@@ -760,10 +771,10 @@ function resetWorld(){
 
 function renderWorld(newChars, newLocs){
   worldCharsEl.innerHTML = world.characters.length
-    ? world.characters.map(c => `<span class="chip character${newChars.includes(c) ? ' new' : ''}">${c}</span>`).join('')
+    ? world.characters.map(c => `<span class="chip character${newChars.includes(c) ? ' new' : ''}">${escapeHtml(c)}</span>`).join('')
     : '<span class="world-empty">characters: none yet</span>';
   worldLocsEl.innerHTML = world.locations.length
-    ? world.locations.map(l => `<span class="chip location${newLocs.includes(l) ? ' new' : ''}">${l}</span>`).join('')
+    ? world.locations.map(l => `<span class="chip location${newLocs.includes(l) ? ' new' : ''}">${escapeHtml(l)}</span>`).join('')
     : '<span class="world-empty">locations: none yet</span>';
 }
 
@@ -872,9 +883,9 @@ function renderScene(scene){
   if (!div){ div = document.createElement('div'); div.className = 'scene'; div.id = `scene-${scene.scene}`; scenesEl.appendChild(div); }
   const isFallback = !!scene.fallback || /Writer agent hit a/.test(scene.text || '');
   div.innerHTML = `
-    <div class="slug">Scene ${scene.scene} — ${scene.title}${isFallback ? '<span class="warn">writer fallback used</span>' : ''}</div>
-    <p class="scene-text">${scene.text.trim()}</p>
-    <div class="image-prompt"><b>Image prompt</b> ${scene.image_prompt}</div>
+    <div class="slug">Scene ${scene.scene} — ${escapeHtml(scene.title)}${isFallback ? '<span class="warn">writer fallback used</span>' : ''}</div>
+    <p class="scene-text">${escapeHtml((scene.text || '').trim())}</p>
+    <div class="image-prompt"><b>Image prompt</b> ${escapeHtml(scene.image_prompt)}</div>
     <div class="scene-image" id="img-${scene.scene}">
       <div class="skeleton-img"></div>
     </div>
