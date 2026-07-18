@@ -38,25 +38,20 @@ person back to typing, never crash the request.
 import os
 from typing import Optional
 
-VOICE_BACKEND = os.environ.get("VOICE_BACKEND", "mock").strip().lower()
+from . import common
+
 FIREWORKS_AUDIO_MODEL = os.environ.get("FIREWORKS_AUDIO_MODEL", "whisper-v3")
-FIREWORKS_BASE_URL = os.environ.get(
-    "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1"
+
+VOICE_BACKEND, _api_key = common.resolve_backend(
+    "voice",
+    os.environ.get("VOICE_BACKEND", "mock").strip().lower(),
+    remote="fireworks",
+    fallback="mock",
+    missing_msg="FIREWORKS_API_KEY not set; falling back to mock (no server-side transcription).",
+    ready_msg=f"Fireworks Whisper backend ready: {FIREWORKS_AUDIO_MODEL}",
 )
 
-_api_key: Optional[str] = None
-
-if VOICE_BACKEND == "fireworks":
-    _api_key = os.environ.get("FIREWORKS_API_KEY", "").strip()
-    if not _api_key:
-        print("[voice] FIREWORKS_API_KEY not set; falling back to mock (no server-side transcription).")
-        VOICE_BACKEND = "mock"
-    else:
-        print(f"[voice] Fireworks Whisper backend ready: {FIREWORKS_AUDIO_MODEL}")
-
-
-def _log(msg: str) -> None:
-    print(f"[voice] {msg}")
+_log = common.make_logger("voice")
 
 
 def transcribe(audio_bytes: bytes, filename: str = "clip.webm") -> Optional[str]:
@@ -75,11 +70,11 @@ def transcribe(audio_bytes: bytes, filename: str = "clip.webm") -> Optional[str]
 
     import requests
 
-    url = f"{FIREWORKS_BASE_URL}/audio/transcriptions"
+    url = f"{common.FIREWORKS_BASE_URL}/audio/transcriptions"
     try:
         response = requests.post(
             url,
-            headers={"Authorization": f"Bearer {_api_key}"},
+            headers=common.auth_headers(_api_key, content_type=False),
             files={"file": (filename, audio_bytes)},
             data={"model": FIREWORKS_AUDIO_MODEL, "response_format": "json"},
             timeout=30,
