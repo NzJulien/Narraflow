@@ -12,8 +12,8 @@ your original module instead if you have it; write_scene_stream() below
 is the one genuinely new piece, added for token-level streaming.
 
 BACKEND_MODE: "mock" (offline, deterministic), "fireworks" (hosted LLM
-chat completion), or "vllm" (self-hosted, e.g. on AMD Instinct MI300X
-via ROCm - same OpenAI-compatible /chat/completions shape as Fireworks,
+chat completion), or "vllm" (self-hosted on your own GPU server,
+e.g. with vLLM - same OpenAI-compatible /chat/completions shape as Fireworks,
 just pointed at a different base URL/model).
 
 write_scene() stays synchronous and returns the finished scene dict -

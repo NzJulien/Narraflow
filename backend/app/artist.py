@@ -11,8 +11,7 @@ wasn't part of the pasted bundle. Drop in your original module instead
 if you have it; nothing else needs to change.
 
 ARTIST_BACKEND: "mock" (no image - the frontend shows a text placeholder
-and a Retry button) or "fireworks" (Fireworks-hosted FLUX image model,
-served on AMD Instinct MI300X).
+and a Retry button) or "fireworks" (Fireworks-hosted FLUX image model).
 
 Same defensive contract as the rest of the pipeline: any failure here
 returns None instead of raising, so a missing key or a flaky call never

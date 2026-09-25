@@ -1,8 +1,19 @@
+# secrets
+.env
 backend/.env
+*.pem
+
+# python
 __pycache__/
 *.pyc
 .venv/
+venv/
+backend/venv/
+.pytest_cache/
 
-# Narrated stories: real transcripts, generated stories, and recorded audio.
-# Personal data - never commit it.
+# runtime data: real transcripts, generated stories/images, recordings
 backend/data/
+
+# node / tooling
+node_modules/
+*.log

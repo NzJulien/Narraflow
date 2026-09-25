@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%99%3C/text%3E%3C/svg%3E">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NarraFlow — Real-Time Multi-Agent Storytelling</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg: #0c0b09;
+    --panel: #151310;
+    --panel-2: #1b1813;
+    --hairline: rgba(250,238,218,0.09);
+    --hairline-strong: rgba(250,238,218,0.16);
+    --paper: #f2ece1;
+    --paper-dim: #9a9184;
+    --amber: #e8a545;
+    --amber-dim: #8a6a35;
+    --reel-purple: #8f7fce;
+    --live-green: #7fce9a;
+    --rec-red: #d96a5f;
+    --focus: #f2ece1;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: radial-gradient(ellipse at top, #17140f 0%, var(--bg) 60%);
+    color: var(--paper);
+    font-family: 'JetBrains Mono', monospace;
+    min-height:100vh;
+  }
+  .wrap{ max-width: 820px; margin: 0 auto; padding: 40px 20px 96px; }
+
+  a.skip-link{
+    position:absolute; left:-9999px; top:0; background:var(--amber); color:#0c0b09;
+    padding:8px 14px; z-index:100; border-radius:2px;
+  }
+  a.skip-link:focus{ left:16px; top:16px; }
+
+  :focus-visible{ outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .brand{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:6px; }
+  .brand h1{
+    font-family:'Fraunces', serif; font-weight:500; font-size:clamp(24px,5vw,34px); letter-spacing:-0.01em; margin:0;
+  }
+  .brand h1 span{ color: var(--amber); }
+  .brand .tag{ font-size:11px; color: var(--paper-dim); text-transform:uppercase; letter-spacing:0.12em; }
+
+  .status-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px; }
+  .powered{ font-size:11px; color:var(--paper-dim); letter-spacing:0.05em; }
+  .powered b{ color: var(--amber); font-weight:500; }
+
+  .badge-row{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:32px; }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:0.06em;
+    text-transform:uppercase; padding:4px 10px; border-radius:12px; border:1px solid var(--hairline);
+    color:var(--paper-dim);
+  }
+  .badge .dot{ width:6px; height:6px; border-radius:50%; background:currentColor; flex:none; }
+  .badge.live{ color:var(--live-green); border-color:rgba(127,206,154,0.3); }
+  .badge.demo{ color:var(--amber); border-color:var(--amber-dim); }
+  .badge.gpu{ color:var(--reel-purple); border-color:rgba(143,127,206,0.3); }
+
+  .stage{
+    background: var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:2px;
+    padding: clamp(16px,4vw,28px);
+  }
+
+  .idea-row{ display:flex; gap:10px; margin-bottom:10px; }
+  input[type=text], select, input[type=range]{
+    font-family:'Fraunces', serif; font-size:16px; color:var(--paper);
+  }
+  input[type=text]{
+    flex:1; background:#0c0b09; border:1px solid var(--hairline); padding:12px 14px; border-radius:2px; outline:none;
+    min-width:0;
+  }
+  input[type=text]:focus{ border-color: var(--amber-dim); }
+  button{
+    background: transparent; color: var(--amber); border:1px solid var(--amber-dim);
+    font-family:'JetBrains Mono', monospace; font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    padding: 0 18px; height:44px; border-radius:2px; cursor:pointer;
+  }
+  button:hover{ background: rgba(232,165,69,0.08); }
+  button:disabled{ opacity:0.4; cursor:default; }
+  button.ghost{ color:var(--paper-dim); border-color:var(--hairline); }
+  button.ghost:hover{ color:var(--paper); border-color:var(--hairline-strong); background:none; }
+  button.small{ height:30px; padding:0 12px; font-size:10px; }
+
+  #micBtn{
+    width:44px; height:44px; padding:0; flex:none; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    border-color: var(--hairline); color: var(--paper-dim);
+  }
+  #micBtn svg{ width:16px; height:16px; }
+  #micBtn:hover{ border-color: var(--amber-dim); color: var(--amber); background:none; }
+  #micBtn.recording{
+    color: var(--rec-red); border-color: rgba(217,106,95,0.5); background: rgba(217,106,95,0.08);
+    animation: micPulse 1s ease-in-out infinite;
+  }
+  @keyframes micPulse{ 0%,100%{ box-shadow: 0 0 0 0 rgba(217,106,95,0.35);} 50%{ box-shadow: 0 0 0 6px rgba(217,106,95,0);} }
+
+  .voice-hint{ font-size:11px; color:var(--paper-dim); margin: 0 0 18px 2px; min-height:14px; }
+  .voice-hint.error{ color: var(--rec-red); }
+
+  .presets{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+  .preset{
+    font-size:11px; color:var(--paper-dim); border:1px solid var(--hairline); padding:5px 10px;
+    border-radius:12px; cursor:pointer; background:none;
+  }
+  .preset:hover{ color:var(--paper); border-color: var(--hairline-strong); }
+
+  /* --- Config panel ------------------------------------------------ */
+  details.config{ margin-bottom:20px; border:1px solid var(--hairline); border-radius:2px; }
+  details.config > summary{
+    cursor:pointer; list-style:none; padding:12px 14px; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--paper-dim); display:flex; align-items:center; justify-content:space-between;
+  }
+  details.config > summary::-webkit-details-marker{ display:none; }
+  details.config > summary:after{ content:'▸'; transition: transform 0.2s; }
+  details.config[open] > summary:after{ transform: rotate(90deg); }
+  .config-grid{
+    display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:14px;
+    padding: 4px 14px 16px;
+  }
+  .field label{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--paper-dim); margin-bottom:6px; }
+  .field select{
+    width:100%; background:#0c0b09; border:1px solid var(--hairline); color:var(--paper); padding:8px 10px;
+    border-radius:2px; font-size:13px;
+  }
+  .field .range-row{ display:flex; align-items:center; gap:8px; }
+  .field input[type=range]{ flex:1; accent-color: var(--amber); }
+  .field .range-val{ font-size:12px; color:var(--amber); width:22px; text-align:right; }
+
+  /* --- Pipeline timeline -------------------------------------------- */
+  .pipeline{
+    display:flex; align-items:stretch; gap:0; margin-bottom:10px; border:1px solid var(--hairline);
+    border-radius:2px; overflow:hidden; flex-wrap:wrap;
+  }
+  .pnode{
+    flex:1; min-width:110px; padding:10px 12px; display:flex; flex-direction:column; gap:4px;
+    border-right:1px solid var(--hairline); opacity:0.45; transition: opacity 0.25s, background 0.25s;
+  }
+  .pnode:last-child{ border-right:none; }
+  .pnode.active{ opacity:1; background: rgba(232,165,69,0.06); }
+  .pnode.done{ opacity:0.9; }
+  .pnode .pname{ font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--paper); display:flex; align-items:center; gap:6px; }
+  .pnode .pname .dot{ width:6px; height:6px; border-radius:50%; background: var(--paper-dim); flex:none; }
+  .pnode.active .pname .dot{ background: var(--amber); animation: pulse 0.9s ease-in-out infinite; }
+  .pnode.done .pname .dot{ background: var(--live-green); }
+  .pnode .plat{ font-size:11px; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
+  .pnode.done .plat{ color: var(--reel-purple); }
+  @keyframes pulse{ 0%,100%{ opacity:1;} 50%{ opacity:0.25; } }
+
+  .progress-row{ display:flex; align-items:center; gap:10px; margin-bottom:24px; font-size:11px; color:var(--paper-dim); }
+  .progress-track{ flex:1; height:4px; background: var(--hairline); border-radius:2px; overflow:hidden; }
+  .progress-fill{ height:100%; background: var(--amber); width:0%; transition: width 0.3s ease; }
+  .elapsed{ font-variant-numeric: tabular-nums; min-width:52px; text-align:right; }
+
+  .plan{ display:none; margin-bottom:26px; padding-bottom:20px; border-bottom:1px dashed var(--hairline); }
+  .plan.show{ display:block; }
+  .plan .title{ font-family:'Fraunces', serif; font-size:clamp(20px,4vw,24px); color: var(--paper); margin:0 0 6px; }
+  .plan .meta{ font-size:11px; color: var(--reel-purple); text-transform:uppercase; letter-spacing:0.1em; }
+
+  .scenes{ display:flex; flex-direction:column; gap:0; }
+  .scene{
+    padding: 20px 0; border-bottom: 1px solid var(--hairline);
+    opacity:0; transform: translateY(6px);
+    animation: reveal 0.5s ease forwards;
+  }
+  .scene:last-child{ border-bottom:none; }
+  @keyframes reveal{ to{ opacity:1; transform:none; } }
+  .slug{ font-size:11px; color: var(--amber); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .slug .warn{ color: var(--rec-red); font-size:10px; border:1px solid rgba(217,106,95,0.4); padding:2px 6px; border-radius:8px; text-transform:none; letter-spacing:0; }
+  .scene-text{
+    font-family:'Fraunces', serif; font-size:clamp(15px,3vw,18px); line-height:1.65; color: var(--paper); margin:0 0 12px;
+    opacity:0; animation: fadeIn 0.6s ease forwards;
+  }
+  @keyframes fadeIn{ to{ opacity:1; } }
+  .scene-text-stream{
+    font-family:'Fraunces', serif; font-size:clamp(15px,3vw,18px); line-height:1.65; color: var(--paper); margin:0 0 12px;
+  }
+  .scene-text-stream .cursor{ display:inline-block; width:2px; height:1em; background:var(--amber); vertical-align:-2px; animation: pulse 0.8s ease-in-out infinite; }
+  .image-prompt{
+    font-size:11px; color: var(--paper-dim); border-left:2px solid var(--hairline); padding-left:10px;
+  }
+  .image-prompt b{ color: var(--reel-purple); font-weight:500; }
+
+  .scene-tools{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+
+  .scene-image{ margin-top:14px; }
+  .scene-image .kenburns-frame{
+    position:relative; width:100%; aspect-ratio:16/9; overflow:hidden;
+    border-radius:2px; border:1px solid var(--hairline); background:#0c0b09;
+  }
+  .scene-image .kenburns-frame img{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    transform-origin:center center; will-change: transform; opacity:0; animation: imgFadeIn 0.6s ease forwards;
+  }
+  @keyframes imgFadeIn{ to{ opacity:1; } }
+  .scene-image .video-badge{
+    position:absolute; top:8px; right:8px; font-size:9px; letter-spacing:0.08em; text-transform:uppercase;
+    padding:3px 7px; border-radius:10px; background:rgba(12,11,9,0.65); color:var(--reel-purple);
+    border:1px solid rgba(143,127,206,0.35); pointer-events:none;
+  }
+  .scene-image .world-empty{ font-size:11px; color:var(--paper-dim); }
+  .scene-image .pending{
+    font-size:11px; color: var(--reel-purple); display:flex; align-items:center; gap:6px;
+  }
+  .scene-image .pending .dot{ width:5px; height:5px; border-radius:50%; background:currentColor; animation: pulse 0.9s ease-in-out infinite; }
+
+  /* Skeletons */
+  .skeleton-text{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+  .skeleton-line{ height:14px; border-radius:2px; background: linear-gradient(90deg, var(--hairline) 25%, var(--hairline-strong) 37%, var(--hairline) 63%); background-size:400% 100%; animation: shimmer 1.4s ease infinite; }
+  .skeleton-line.w60{ width:60%; }
+  .skeleton-line.w90{ width:90%; }
+  .skeleton-line.w40{ width:40%; }
+  .skeleton-img{ width:100%; aspect-ratio:16/9; border-radius:2px; background: linear-gradient(90deg, var(--hairline) 25%, var(--hairline-strong) 37%, var(--hairline) 63%); background-size:400% 100%; animation: shimmer 1.4s ease infinite; }
+  @keyframes shimmer{ 0%{ background-position:100% 0; } 100%{ background-position:0 0; } }
+
+  .empty{ color: var(--paper-dim); font-size:13px; text-align:center; padding:30px 0; }
+  .footnote{ margin-top:20px; font-size:11px; color:var(--paper-dim); text-align:center; }
+
+  .world{ display:none; margin-top:8px; padding-top:20px; border-top:1px dashed var(--hairline); }
+  .world.show{ display:block; }
+  .world h3{
+    font-family:'JetBrains Mono', monospace; font-size:11px; text-transform:uppercase;
+    letter-spacing:0.1em; color:var(--paper-dim); margin:0 0 10px;
+  }
+  .world-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .world-row:last-child{ margin-bottom:0; }
+  .chip{ font-size:11px; padding:5px 10px; border-radius:12px; border:1px solid var(--hairline); color: var(--paper); }
+  .chip.character{ border-color: rgba(232,165,69,0.35); color: var(--amber); }
+  .chip.location{ border-color: rgba(143,127,206,0.35); color: var(--reel-purple); }
+  .chip.new{ animation: newChip 2.4s ease; }
+  @keyframes newChip{ 0%{ box-shadow: 0 0 0 0 rgba(232,165,69,0.5);} 100%{ box-shadow: 0 0 0 6px rgba(232,165,69,0);} }
+  .world-empty{ font-size:11px; color:var(--paper-dim); }
+
+  /* --- World relationship graph --------------------------------------- */
+  .world-graph{ margin-top:4px; margin-bottom:14px; border:1px solid var(--hairline); border-radius:2px; background:#0c0b09; overflow:hidden; }
+  .world-graph svg{ display:block; width:100%; height:auto; }
+  .world-graph .g-edge{ stroke: var(--hairline-strong); stroke-width:1; }
+  .world-graph .g-edge.new{ stroke: var(--amber); animation: edgeFade 2.4s ease; }
+  @keyframes edgeFade{ 0%{ stroke: var(--amber); stroke-width:2; } 100%{ stroke: var(--hairline-strong); stroke-width:1; } }
+  .world-graph .g-node circle{ stroke-width:1.5; }
+  .world-graph .g-node.character circle{ fill: rgba(232,165,69,0.14); stroke: var(--amber); }
+  .world-graph .g-node.location circle{ fill: rgba(143,127,206,0.14); stroke: var(--reel-purple); }
+  .world-graph .g-node text{ font-family:'JetBrains Mono', monospace; font-size:9px; fill: var(--paper); text-anchor:middle; }
+  .world-graph-empty{ font-size:11px; color:var(--paper-dim); padding:14px; text-align:center; }
+
+  /* --- Story statistics bar -------------------------------------------- */
+  .stats-bar{
+    display:none; margin-top:20px; padding-top:18px; border-top:1px dashed var(--hairline);
+    grid-template-columns: repeat(auto-fit, minmax(110px,1fr)); gap:12px;
+  }
+  .stats-bar.show{ display:grid; }
+  .stat{ border:1px solid var(--hairline); border-radius:2px; padding:10px 12px; }
+  .stat .stat-val{ font-family:'Fraunces', serif; font-size:20px; color: var(--amber); line-height:1.1; }
+  .stat .stat-label{ font-size:10px; text-transform:uppercase; letter-spacing:0.07em; color:var(--paper-dim); margin-top:4px; }
+  .stat.backend .stat-val{ font-size:13px; color: var(--paper); word-break:break-word; }
+
+  /* --- Execution log -------------------------------------------------- */
+  .logpanel{ margin-top:22px; border:1px solid var(--hairline); border-radius:2px; }
+  .logpanel summary{ cursor:pointer; list-style:none; padding:12px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--paper-dim); display:flex; align-items:center; justify-content:space-between; }
+  .logpanel summary::-webkit-details-marker{ display:none; }
+  .logpanel summary:after{ content:'▸'; transition: transform 0.2s; }
+  .logpanel[open] summary:after{ transform: rotate(90deg); }
+  .logbody{ max-height:220px; overflow-y:auto; padding: 0 14px 14px; font-size:11px; color: var(--paper-dim); }
+  .logbody .line{ padding:3px 0; border-bottom:1px dashed var(--hairline); display:flex; gap:10px; }
+  .logbody .line:last-child{ border-bottom:none; }
+  .logbody .t{ color: var(--amber-dim); flex:none; }
+
+  .actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap; }
+  .actions button{ display:none; }
+  .actions button.show{ display:inline-block; }
+
+  .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  /* Several narrate-mode elements set an explicit `display` (flex/grid) that
+     would otherwise silently beat the UA stylesheet's [hidden] rule, since
+     author CSS always wins over UA CSS regardless of specificity. */
+  [hidden]{ display:none !important; }
+
+  @media (max-width: 480px){
+    .idea-row{ flex-wrap:wrap; }
+    input[type=text]{ flex-basis:100%; }
+    .pnode{ min-width:90px; }
+    .actions{ justify-content:stretch; }
+    .actions button{ flex:1; }
+  }
+
+  /* --- Mode tabs (Record Story / Fiction Generator) ---------------------- */
+  .mode-tabs{ display:flex; gap:0; margin-bottom:20px; border-bottom:1px solid var(--hairline); }
+  .mode-tab{
+    background:none; border:none; border-bottom:2px solid transparent; color:var(--paper-dim);
+    font-family:'JetBrains Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+    padding:0 4px 12px; height:auto; cursor:pointer; margin-right:22px;
+  }
+  .mode-tab:hover{ color:var(--paper); }
+  .mode-tab.active{ color:var(--amber); border-bottom-color:var(--amber); }
+  .mode-panel{ display:none; }
+  .mode-panel.active{ display:block; }
+
+  /* --- Narrate: Record / My Stories sub-tabs ------------------------------ */
+  .narrate-subtabs{ display:flex; gap:10px; margin-bottom:22px; }
+  .subtab{
+    background:none; border:1px solid var(--hairline); color:var(--paper-dim); border-radius:14px;
+    font-family:'JetBrains Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+    padding:6px 14px; height:auto; cursor:pointer;
+  }
+  .subtab:hover{ color:var(--paper); }
+  .subtab.active{ color:var(--amber); border-color:var(--amber-dim); }
+  /* .subview visibility is driven by the `hidden` attribute (toggled in
+     narrate.js), not a class - see the [hidden] rule above. */
+
+  /* --- Record hero --------------------------------------------------------- */
+  .record-hero{ text-align:center; padding:28px 10px 20px; }
+  .record-btn{
+    width:120px; height:120px; border-radius:50%; border:2px solid var(--amber-dim); background:var(--panel-2);
+    color:var(--amber); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    cursor:pointer; margin:0 auto; padding:0; font-family:'JetBrains Mono', monospace;
+  }
+  .record-btn:hover{ border-color:var(--amber); }
+  .record-btn .record-btn-dot{ width:18px; height:18px; border-radius:50%; background:var(--rec-red); }
+  .record-btn .record-btn-label{ font-size:10px; text-transform:uppercase; letter-spacing:0.08em; max-width:90px; line-height:1.3; }
+  .record-btn.recording{ border-color: var(--rec-red); animation: micPulse 1.4s ease-in-out infinite; }
+  .record-btn.recording .record-btn-dot{ animation: pulse 0.9s ease-in-out infinite; }
+  .record-btn.paused .record-btn-dot{ background: var(--amber); animation:none; }
+  .record-btn.error{ border-color: var(--rec-red); color: var(--rec-red); }
+  .record-btn:disabled{ opacity:0.5; cursor:default; }
+
+  .record-status{ margin-top:16px; font-size:12px; color:var(--paper-dim); min-height:16px; }
+  .record-status.error{ color:var(--rec-red); }
+  .record-status .retry-link{
+    color:var(--amber); text-decoration:underline; cursor:pointer; background:none; border:none;
+    font:inherit; padding:0; margin-left:4px;
+  }
+
+  .record-controls{ display:flex; align-items:center; justify-content:center; gap:10px; margin-top:16px; }
+  .record-timer{ font-variant-numeric:tabular-nums; font-size:14px; color:var(--paper); min-width:52px; }
+
+  /* --- Live transcript + story panels --------------------------------------- */
+  .narrate-panels{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px; }
+  @media (max-width:640px){ .narrate-panels{ grid-template-columns:1fr; } }
+  .narrate-panel h3{
+    font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--paper-dim); margin:0 0 8px;
+  }
+  .transcript-box, .story-box{
+    border:1px solid var(--hairline); border-radius:2px; padding:12px 14px; min-height:160px; max-height:320px;
+    overflow-y:auto; font-size:14px; line-height:1.6;
+  }
+  .transcript-box{ font-family:'JetBrains Mono', monospace; color:var(--paper-dim); }
+  .transcript-box .final{ color:var(--paper); }
+  .transcript-box .interim{ color:var(--reel-purple); font-style:italic; opacity:0.85; }
+  .transcript-empty, .story-empty{ color:var(--paper-dim); font-size:12px; }
+  .story-box{ font-family:'Fraunces', serif; color:var(--paper); white-space:pre-wrap; }
+  .story-box.flash{ animation: storyFlash 1.2s ease; }
+  @keyframes storyFlash{ 0%{ background: rgba(232,165,69,0.14); } 100%{ background:transparent; } }
+
+  /* --- Completed story ------------------------------------------------------- */
+  .completed-story{ margin-top:24px; padding-top:20px; border-top:1px dashed var(--hairline); }
+  .completed-header{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .story-title-input{
+    flex:1; min-width:200px; background:none; border:none; border-bottom:1px solid transparent;
+    font-family:'Fraunces', serif; font-size:clamp(20px,4vw,26px); color:var(--paper); padding:2px 0;
+  }
+  .story-title-input:focus{ outline:none; border-bottom-color:var(--amber-dim); }
+  .completed-actions{ display:flex; gap:8px; }
+  .completed-meta{ font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:14px; }
+  .story-audio{ width:100%; margin-bottom:16px; }
+  .completed-story-text{
+    font-family:'Fraunces', serif; font-size:clamp(15px,3vw,18px); line-height:1.7; color:var(--paper); white-space:pre-wrap;
+  }
+  .completed-story-edit{
+    width:100%; min-height:220px; background:#0c0b09; border:1px solid var(--hairline); color:var(--paper);
+    font-family:'Fraunces', serif; font-size:15px; line-height:1.7; padding:12px 14px; border-radius:2px; resize:vertical;
+  }
+  .completed-footer{ margin-top:18px; text-align:right; }
+
+  /* --- Library --------------------------------------------------------------- */
+  .library-list{ display:flex; flex-direction:column; gap:0; }
+  .library-card{
+    padding:16px 0; border-bottom:1px solid var(--hairline); cursor:pointer;
+    display:flex; flex-direction:column; gap:5px; background:none; border-left:none; border-right:none;
+    border-top:none; text-align:left; width:100%; color:inherit; font:inherit;
+  }
+  .library-card:hover .library-title{ color:var(--amber); }
+  .library-title{ font-family:'Fraunces', serif; font-size:17px; color:var(--paper); }
+  .library-meta{ font-size:11px; color:var(--paper-dim); text-transform:uppercase; letter-spacing:0.06em; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .library-preview{ font-size:13px; color:var(--paper-dim); line-height:1.5; }
+  .library-status{ font-size:10px; padding:2px 8px; border-radius:10px; border:1px solid var(--hairline); color:var(--paper-dim); }
+  .library-status.completed{ color:var(--live-green); border-color:rgba(127,206,154,0.3); }
+  .library-status.recording{ color:var(--rec-red); border-color:rgba(217,106,95,0.4); }
+
+  @media (max-width: 480px){
+    .record-btn{ width:104px; height:104px; }
+  }
+</style>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to main content</a>
+<div class="wrap" id="main">
+
+  <div class="brand">
+    <h1>Narra<span>Flow</span></h1>
+    <div class="tag">Original multi-agent pipeline demo · <a href="index.html" style="color:inherit">new voice studio</a></div>
+  </div>
+  <div class="status-row">
+    <div class="powered">Real-time multi-agent storytelling engine — powered by <b>ROCm</b> + <b>Fireworks AI</b></div>
+  </div>
+  <div class="badge-row" id="badgeRow" aria-live="polite">
+    <div class="badge" id="statusBadge"><span class="dot"></span><span id="statusText">Checking backend…</span></div>
+  </div>
+
+  <div class="mode-tabs" role="tablist" aria-label="NarraFlow mode">
+    <button type="button" class="mode-tab active" id="tabNarrate" role="tab" aria-selected="true" aria-controls="narrateMode">Record Story</button>
+    <button type="button" class="mode-tab" id="tabFiction" role="tab" aria-selected="false" aria-controls="fictionMode">Fiction Generator</button>
+  </div>
+
+  <section id="narrateMode" class="mode-panel active" role="tabpanel" aria-labelledby="tabNarrate">
+    <div class="stage">
+
+      <div class="narrate-subtabs" role="tablist" aria-label="Narrate views">
+        <button type="button" class="subtab active" id="subtabRecord" role="tab" aria-selected="true">Record</button>
+        <button type="button" class="subtab" id="subtabLibrary" role="tab" aria-selected="false">My Stories</button>
+      </div>
+
+      <div class="subview" id="recordView">
+
+        <div class="record-hero" id="recordHero">
+          <button type="button" id="recordBtn" class="record-btn" aria-label="Start narrating">
+            <span class="record-btn-dot" aria-hidden="true"></span>
+            <span class="record-btn-label" id="recordBtnLabel">Start Narrating</span>
+          </button>
+          <div class="record-status" id="recordStatus" role="status" aria-live="polite">
+            <span id="recordStatusText">Tap to begin — NarraFlow will ask for microphone access, then transcribe and build your story as you speak.</span>
+          </div>
+          <div class="record-controls" id="recordControls" hidden>
+            <span class="record-timer" id="recordTimer">00:00</span>
+            <button type="button" class="ghost small" id="pauseBtn">Pause</button>
+            <button type="button" class="ghost small" id="stopBtn">Stop</button>
+          </div>
+        </div>
+
+        <div class="narrate-panels" id="narratePanels" hidden>
+          <div class="narrate-panel">
+            <h3>Live transcript</h3>
+            <div class="transcript-box" id="transcriptBox" aria-live="polite">
+              <span class="transcript-empty" id="transcriptEmpty">Your words will appear here as you speak…</span>
+            </div>
+          </div>
+          <div class="narrate-panel">
+            <h3>Story</h3>
+            <div class="story-box" id="storyBox" aria-live="polite">
+              <span class="story-empty" id="storyEmpty">Your story forms here as you narrate — shaped from exactly what you say, nothing invented.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="completed-story" id="completedStory" hidden>
+          <div class="completed-header">
+            <label for="storyTitleInput" class="sr-only">Story title</label>
+            <input type="text" id="storyTitleInput" class="story-title-input" />
+            <div class="completed-actions">
+              <button type="button" class="ghost small" id="editStoryBtn">Edit</button>
+              <button type="button" class="ghost small" id="saveStoryBtn" hidden>Save</button>
+            </div>
+          </div>
+          <div class="completed-meta" id="completedMeta"></div>
+          <audio controls id="storyAudio" class="story-audio" hidden></audio>
+          <p class="completed-story-text" id="completedStoryText"></p>
+          <label for="completedStoryEdit" class="sr-only">Edit story text</label>
+          <textarea class="completed-story-edit" id="completedStoryEdit" hidden></textarea>
+          <div class="completed-footer">
+            <button type="button" class="ghost small" id="newRecordingBtn">Record another story</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="subview" id="libraryView" hidden>
+        <div class="library-list" id="libraryList">
+          <div class="empty" id="libraryEmpty">No stories yet — narrate one and it will appear here.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="fictionMode" class="mode-panel" role="tabpanel" aria-labelledby="tabFiction">
+  <div class="stage">
+    <div class="idea-row">
+      <label for="idea" class="sr-only">Story idea</label>
+      <input type="text" id="idea" placeholder="A young girl in Cameroon discovers a hidden city beneath Mount Cameroon." />
+      <button id="micBtn" type="button" title="Speak your idea" aria-label="Speak your idea">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+      </button>
+      <button id="go" type="button">Generate</button>
+    </div>
+    <div class="voice-hint" id="voiceHint" role="status">Tap the mic and say your idea out loud — it becomes a scene-by-scene story with animated illustrations.</div>
+    <div class="presets">
+      <button type="button" class="preset" data-idea="A lonely robot discovers music for the first time.">robot discovers music</button>
+      <button type="button" class="preset" data-idea="A dragon discovers electricity in a modern city.">dragon discovers electricity</button>
+      <button type="button" class="preset" data-idea="A young girl in Cameroon discovers a hidden city beneath Mount Cameroon.">hidden city, Mount Cameroon</button>
+    </div>
+
+    <details class="config">
+      <summary>Story settings <span id="configSummary">5 scenes · default genre &amp; tone</span></summary>
+      <div class="config-grid">
+        <div class="field">
+          <label for="scenesRange">Scene count</label>
+          <div class="range-row">
+            <input type="range" id="scenesRange" min="3" max="10" value="5" />
+            <span class="range-val" id="scenesVal">5</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="genreSel">Genre</label>
+          <select id="genreSel">
+            <option value="">Auto (Director decides)</option>
+            <option>Adventure</option>
+            <option>Mystery</option>
+            <option>Sci-Fi</option>
+            <option>Fantasy</option>
+            <option>Drama</option>
+            <option>Comedy</option>
+            <option>Horror</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="toneSel">Tone</label>
+          <select id="toneSel">
+            <option value="">Auto</option>
+            <option>Whimsical</option>
+            <option>Dark</option>
+            <option>Heartfelt</option>
+            <option>Epic</option>
+            <option>Comedic</option>
+            <option>Melancholic</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lengthSel">Scene length</label>
+          <select id="lengthSel">
+            <option value="">Default</option>
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="long">Long</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="imgStyleSel">Image style</label>
+          <select id="imgStyleSel">
+            <option value="">Default</option>
+            <option value="watercolor concept art">Watercolor</option>
+            <option value="cinematic photorealistic">Cinematic photoreal</option>
+            <option value="anime illustration">Anime</option>
+            <option value="pencil sketch">Pencil sketch</option>
+            <option value="claymation">Claymation</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="camStyleSel">Camera style</label>
+          <select id="camStyleSel">
+            <option value="">Default (pacing-driven)</option>
+            <option value="handheld">Handheld</option>
+            <option value="sweeping">Sweeping</option>
+            <option value="static">Static</option>
+            <option value="punch-in">Punch-in</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <div class="pipeline" id="pipeline" aria-hidden="true">
+      <div class="pnode" data-agent="director"><span class="pname"><span class="dot"></span>Director</span><span class="plat" data-plat="director">—</span></div>
+      <div class="pnode" data-agent="writer"><span class="pname"><span class="dot"></span>Writer</span><span class="plat" data-plat="writer">—</span></div>
+      <div class="pnode" data-agent="memory"><span class="pname"><span class="dot"></span>Memory</span><span class="plat" data-plat="memory">—</span></div>
+      <div class="pnode" data-agent="artist"><span class="pname"><span class="dot"></span>Artist</span><span class="plat" data-plat="artist">—</span></div>
+      <div class="pnode" data-agent="cinematographer"><span class="pname"><span class="dot"></span>Cine</span><span class="plat" data-plat="cinematographer">—</span></div>
+    </div>
+    <div class="progress-row">
+      <span id="progressLabel">idle</span>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <span class="elapsed" id="elapsed">0.0s</span>
+    </div>
+
+    <div class="plan" id="plan">
+      <p class="title" id="plan-title"></p>
+      <div class="meta" id="plan-meta"></div>
+    </div>
+
+    <div class="scenes" id="scenes"></div>
+    <div class="empty" id="empty">Enter an idea above, speak it into the mic, or pick a preset — and watch the story build scene by scene.</div>
+
+    <div class="world" id="world">
+      <h3>World state — tracked by the Memory agent</h3>
+      <div class="world-graph" id="worldGraph"><div class="world-graph-empty">Relationships appear here once a scene introduces a character alongside a location.</div></div>
+      <div class="world-row"><div id="worldChars"></div></div>
+      <div class="world-row"><div id="worldLocs"></div></div>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat"><div class="stat-val" id="statScenes">—</div><div class="stat-label">Scenes</div></div>
+      <div class="stat"><div class="stat-val" id="statWords">—</div><div class="stat-label">Words</div></div>
+      <div class="stat"><div class="stat-val" id="statTime">—</div><div class="stat-label">Gen. time</div></div>
+      <div class="stat backend"><div class="stat-val" id="statWriter">—</div><div class="stat-label">Writer backend</div></div>
+      <div class="stat backend"><div class="stat-val" id="statArtist">—</div><div class="stat-label">Artist backend</div></div>
+      <div class="stat backend"><div class="stat-val" id="statCamera">—</div><div class="stat-label">Camera backend</div></div>
+    </div>
+
+    <details class="logpanel" id="logpanel">
+      <summary>Execution log <span id="logCount">0 events</span></summary>
+      <div class="logbody" id="logBody" aria-live="polite"></div>
+    </details>
+
+    <div class="actions">
+      <button id="copyBtn" class="ghost small">Copy Story</button>
+      <button id="mdBtn" class="ghost small">Download Markdown</button>
+      <button id="pdfBtn" class="ghost small">Download PDF</button>
+      <button id="imgBtn" class="ghost small">Download Images</button>
+    </div>
+  </div>
+
+  <div class="footnote">Backend not connected, or the Artist backend is off? Scenes still stream on local mock data — just without generated images.</div>
+  </section>
+</div>
+
+<script src="narrate.js" defer></script>
+<script>
+// Same-origin when served by the backend itself (e.g. inside the Docker
+// container, or once deployed); falls back to localhost when opened
+// standalone via file://.
+const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+
+const ideaInput = document.getElementById('idea');
+const goBtn = document.getElementById('go');
+const micBtn = document.getElementById('micBtn');
+const voiceHint = document.getElementById('voiceHint');
+const scenesEl = document.getElementById('scenes');
+const emptyEl = document.getElementById('empty');
+const planEl = document.getElementById('plan');
+const planTitle = document.getElementById('plan-title');
+const planMeta = document.getElementById('plan-meta');
+const statusBadge = document.getElementById('statusBadge');
+const statusText = document.getElementById('statusText');
+const badgeRow = document.getElementById('badgeRow');
+const worldEl = document.getElementById('world');
+const worldCharsEl = document.getElementById('worldChars');
+const worldLocsEl = document.getElementById('worldLocs');
+const worldGraphEl = document.getElementById('worldGraph');
+const statsBarEl = document.getElementById('statsBar');
+const statScenesEl = document.getElementById('statScenes');
+const statWordsEl = document.getElementById('statWords');
+const statTimeEl = document.getElementById('statTime');
+const statWriterEl = document.getElementById('statWriter');
+const statArtistEl = document.getElementById('statArtist');
+const statCameraEl = document.getElementById('statCamera');
+const copyBtn = document.getElementById('copyBtn');
+const mdBtn = document.getElementById('mdBtn');
+const pdfBtn = document.getElementById('pdfBtn');
+const imgBtn = document.getElementById('imgBtn');
+const pipelineEl = document.getElementById('pipeline');
+const progressFill = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const elapsedEl = document.getElementById('elapsed');
+const logBody = document.getElementById('logBody');
+const logCount = document.getElementById('logCount');
+const scenesRange = document.getElementById('scenesRange');
+const scenesVal = document.getElementById('scenesVal');
+const genreSel = document.getElementById('genreSel');
+const toneSel = document.getElementById('toneSel');
+const lengthSel = document.getElementById('lengthSel');
+const imgStyleSel = document.getElementById('imgStyleSel');
+const camStyleSel = document.getElementById('camStyleSel');
+const configSummary = document.getElementById('configSummary');
+
+document.querySelectorAll('.preset').forEach(p => {
+  p.addEventListener('click', () => { ideaInput.value = p.dataset.idea; ideaInput.focus(); });
+});
+
+scenesRange.addEventListener('input', updateConfigSummary);
+genreSel.addEventListener('change', updateConfigSummary);
+toneSel.addEventListener('change', updateConfigSummary);
+function updateConfigSummary(){
+  scenesVal.textContent = scenesRange.value;
+  configSummary.textContent = `${scenesRange.value} scenes · ${genreSel.value || 'default genre'} · ${toneSel.value || 'default tone'}`;
+}
+updateConfigSummary();
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+// ---------------------------------------------------------------------------
+// Timer / progress / pipeline / log — shared by both live and mock paths so
+// judges see the same instrumentation regardless of which one is running.
+// ---------------------------------------------------------------------------
+let runStart = 0;
+let timerHandle = null;
+let totalScenes = 5;
+let scenesCompleted = 0;
+let eventCount = 0;
+
+function startTimer(){
+  runStart = performance.now();
+  timerHandle = setInterval(() => {
+    elapsedEl.textContent = ((performance.now() - runStart) / 1000).toFixed(1) + 's';
+  }, 100);
+}
+function stopTimer(finalMs){
+  if (timerHandle) clearInterval(timerHandle);
+  const secs = finalMs != null ? (finalMs / 1000) : ((performance.now() - runStart) / 1000);
+  elapsedEl.textContent = secs.toFixed(1) + 's (total)';
+}
+
+function resetPipeline(){
+  pipelineEl.querySelectorAll('.pnode').forEach(n => {
+    n.classList.remove('active', 'done');
+    n.querySelector('[data-plat]').textContent = '—';
+  });
+  progressFill.style.width = '0%';
+  progressLabel.textContent = 'idle';
+}
+function setAgentActive(agent){
+  pipelineEl.querySelectorAll('.pnode').forEach(n => {
+    if (n.dataset.agent === agent){ n.classList.add('active'); n.classList.remove('done'); }
+  });
+  progressLabel.textContent = `${agent} running…`;
+}
+function setAgentTiming(agent, ms){
+  const node = pipelineEl.querySelector(`.pnode[data-agent="${agent}"]`);
+  if (!node) return;
+  node.classList.remove('active');
+  node.classList.add('done');
+  node.querySelector('[data-plat]').textContent = `${ms}ms`;
+}
+function updateProgress(){
+  const pct = totalScenes ? Math.min(100, Math.round((scenesCompleted / totalScenes) * 100)) : 0;
+  progressFill.style.width = pct + '%';
+  progressLabel.textContent = scenesCompleted >= totalScenes ? 'done' : `${pct}% · scene ${scenesCompleted}/${totalScenes}`;
+}
+
+// ---------------------------------------------------------------------------
+// Story statistics — computed entirely client-side from what's already
+// rendered in the DOM, so this works identically whether the story came
+// from the live backend or the offline mock path.
+// ---------------------------------------------------------------------------
+function countWords(){
+  let total = 0;
+  scenesEl.querySelectorAll('.scene-text').forEach(el => {
+    const words = el.textContent.trim().split(/\s+/).filter(Boolean);
+    total += words.length;
+  });
+  return total;
+}
+
+function updateStats(finalMs){
+  const sceneCount = scenesEl.querySelectorAll('.scene-text').length;
+  statScenesEl.textContent = sceneCount || '—';
+  statWordsEl.textContent = countWords() || '—';
+  const secs = finalMs != null ? finalMs / 1000 : (performance.now() - runStart) / 1000;
+  statTimeEl.textContent = secs.toFixed(1) + 's';
+
+  const b = lastKnownBackends;
+  statWriterEl.textContent = b ? (b.writer_backend === 'mock' ? 'Mock' : b.writer_backend) : 'Mock (offline demo)';
+  statArtistEl.textContent = b ? (b.artist_backend === 'mock' ? 'Mock' : b.artist_backend) : 'Mock (offline demo)';
+  statCameraEl.textContent = b ? (b.cinematographer_backend === 'fireworks' ? 'Fireworks video' : 'Ken Burns') : 'Ken Burns (offline demo)';
+
+  statsBarEl.classList.add('show');
+}
+
+function logLine(text){
+  eventCount++;
+  const el = document.createElement('div');
+  el.className = 'line';
+  const t = ((performance.now() - runStart) / 1000).toFixed(1) + 's';
+  el.innerHTML = `<span class="t">[${t}]</span><span>${text}</span>`;
+  logBody.appendChild(el);
+  logBody.scrollTop = logBody.scrollHeight;
+  logCount.textContent = `${eventCount} event${eventCount === 1 ? '' : 's'}`;
+}
+function resetLog(){
+  logBody.innerHTML = '';
+  eventCount = 0;
+  logCount.textContent = '0 events';
+}
+
+// ---------------------------------------------------------------------------
+// Backend status badges
+// ---------------------------------------------------------------------------
+let lastKnownBackends = null;
+
+async function checkBackend(){
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(`${API_BASE}/`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('bad status');
+    const data = await res.json();
+    lastKnownBackends = data;
+    statusBadge.className = 'badge live';
+    const writerLabel = data.writer_backend === 'mock'
+      ? 'mock writer'
+      : `${data.writer_backend} writer${data.model ? ' (' + data.model + ')' : ''}`;
+    const artistLabel = data.artist_backend === 'mock' ? 'no artist' : 'artist live';
+    const cameraLabel = data.cinematographer_backend === 'fireworks' ? 'fireworks video' : 'ken burns';
+    statusText.textContent = `Live · ${writerLabel} · ${artistLabel} · ${cameraLabel}`;
+
+    const extras = [];
+    if (data.gpu) extras.push({ cls: 'gpu', text: data.gpu });
+    extras.push({ cls: data.writer_backend === 'mock' ? '' : 'live', text: `Writer: ${data.writer_backend}` });
+    extras.push({ cls: data.artist_backend === 'mock' ? '' : 'live', text: `Artist: ${data.artist_backend}` });
+    extras.push({ cls: data.cinematographer_backend === 'fireworks' ? 'live' : '', text: `Camera: ${data.cinematographer_backend}` });
+    extras.forEach(e => {
+      const b = document.createElement('div');
+      b.className = `badge ${e.cls}`;
+      b.innerHTML = `<span class="dot"></span><span>${e.text}</span>`;
+      badgeRow.appendChild(b);
+    });
+  } catch (err) {
+    statusBadge.className = 'badge demo';
+    statusText.textContent = 'Demo mode (offline)';
+    lastKnownBackends = null;
+  }
+}
+checkBackend();
+
+// ---------------------------------------------------------------------------
+// Voice input — Web Speech API first (free, instant, in-browser), with a
+// Fireworks Whisper server-side fallback for browsers without it.
+// ---------------------------------------------------------------------------
+const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizer = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+
+function setHint(text, isError){
+  voiceHint.textContent = text;
+  voiceHint.classList.toggle('error', !!isError);
+}
+
+function startRecordingUI(){
+  isRecording = true;
+  micBtn.classList.add('recording');
+  setHint('Listening… tap the mic again to stop.');
+}
+function stopRecordingUI(){
+  isRecording = false;
+  micBtn.classList.remove('recording');
+}
+
+async function onTranscript(text){
+  stopRecordingUI();
+  if (!text || !text.trim()){
+    setHint('Didn\'t catch that — try again, or just type your idea.', true);
+    return;
+  }
+  ideaInput.value = text.trim();
+  setHint(`Heard: "${text.trim()}"`);
+  if (!goBtn.disabled) goBtn.click();
+}
+
+function startBrowserSpeech(){
+  recognizer = new SpeechRecognitionImpl();
+  recognizer.lang = 'en-US';
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+
+  recognizer.onresult = (event) => {
+    const text = event.results[0][0].transcript;
+    onTranscript(text);
+  };
+  recognizer.onerror = () => {
+    setHint('Mic error — try again, or type your idea instead.', true);
+    stopRecordingUI();
+  };
+  recognizer.onend = () => { if (isRecording) stopRecordingUI(); };
+
+  startRecordingUI();
+  recognizer.start();
+}
+
+async function startFireworksFallback(){
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      setHint('Transcribing…');
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const form = new FormData();
+      form.append('file', blob, 'clip.webm');
+      try {
+        const res = await fetch(`${API_BASE}/voice/transcribe`, { method: 'POST', body: form });
+        const data = await res.json();
+        await onTranscript(data.text);
+      } catch (err) {
+        setHint('Voice backend unavailable — please type your idea.', true);
+        stopRecordingUI();
+      }
+    };
+    mediaRecorder.start();
+    startRecordingUI();
+  } catch (err) {
+    setHint('Mic access denied — please type your idea instead.', true);
+    stopRecordingUI();
+  }
+}
+
+micBtn.addEventListener('click', () => {
+  if (isRecording){
+    if (recognizer) recognizer.stop();
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    return;
+  }
+  if (SpeechRecognitionImpl){
+    startBrowserSpeech();
+  } else {
+    setHint('Browser speech recognition unavailable — using server-side transcription.');
+    startFireworksFallback();
+  }
+});
+
+if (!SpeechRecognitionImpl && !navigator.mediaDevices){
+  micBtn.disabled = true;
+  setHint('Voice input isn\'t supported in this browser — please type your idea.');
+}
+
+// ---------------------------------------------------------------------------
+// World panel — makes the Memory agent's output visible, with a diff
+// highlight the moment something new is introduced.
+// ---------------------------------------------------------------------------
+let world = { characters: [], locations: [], sceneLinks: [] };
+
+function resetWorld(){
+  world = { characters: [], locations: [], sceneLinks: [] };
+  worldEl.classList.remove('show');
+  renderWorld([], []);
+  renderWorldGraph([]);
+}
+
+function renderWorld(newChars, newLocs){
+  worldCharsEl.innerHTML = world.characters.length
+    ? world.characters.map(c => `<span class="chip character${newChars.includes(c) ? ' new' : ''}">${c}</span>`).join('')
+    : '<span class="world-empty">characters: none yet</span>';
+  worldLocsEl.innerHTML = world.locations.length
+    ? world.locations.map(l => `<span class="chip location${newLocs.includes(l) ? ' new' : ''}">${l}</span>`).join('')
+    : '<span class="world-empty">locations: none yet</span>';
+}
+
+function addToWorld(scene){
+  const newChars = [];
+  const newLocs = [];
+  (scene.characters_introduced || []).forEach(c => {
+    if (!world.characters.includes(c)) { world.characters.push(c); newChars.push(c); }
+  });
+  (scene.locations_introduced || []).forEach(l => {
+    if (!world.locations.includes(l)) { world.locations.push(l); newLocs.push(l); }
+  });
+  if (newChars.length || newLocs.length){
+    worldEl.classList.add('show');
+    renderWorld(newChars, newLocs);
+    logLine(`Memory → world updated: ${[...newChars, ...newLocs].join(', ') || 'no new entities'}`);
+    if (newChars.length && newLocs.length){
+      world.sceneLinks.push({ characters: newChars, locations: newLocs, isNew: true });
+    }
+    renderWorldGraph(newChars.concat(newLocs));
+  }
+  return { newChars, newLocs };
+}
+
+function renderWorldGraph(highlightNames){
+  highlightNames = highlightNames || [];
+  if (!world.characters.length && !world.locations.length){
+    worldGraphEl.innerHTML = '<div class="world-graph-empty">Relationships appear here once a scene introduces a character alongside a location.</div>';
+    return;
+  }
+
+  const width = 600, height = 220, pad = 60;
+  const charY = 56, locY = height - 56;
+
+  const charPositions = {};
+  world.characters.forEach((name, i) => {
+    const n = world.characters.length;
+    const x = n === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (n - 1);
+    charPositions[name] = { x, y: charY };
+  });
+  const locPositions = {};
+  world.locations.forEach((name, i) => {
+    const n = world.locations.length;
+    const x = n === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (n - 1);
+    locPositions[name] = { x, y: locY };
+  });
+
+  let edges = '';
+  world.sceneLinks.forEach(link => {
+    link.characters.forEach(c => {
+      link.locations.forEach(l => {
+        const a = charPositions[c], b = locPositions[l];
+        if (!a || !b) return;
+        const isNewEdge = highlightNames.includes(c) || highlightNames.includes(l);
+        edges += `<line class="g-edge${isNewEdge ? ' new' : ''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"></line>`;
+      });
+    });
+  });
+
+  const escapeXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let nodes = '';
+  Object.entries(charPositions).forEach(([name, p]) => {
+    nodes += `<g class="g-node character"><circle cx="${p.x}" cy="${p.y}" r="7"></circle><text x="${p.x}" y="${p.y - 12}">${escapeXml(name)}</text></g>`;
+  });
+  Object.entries(locPositions).forEach(([name, p]) => {
+    nodes += `<g class="g-node location"><circle cx="${p.x}" cy="${p.y}" r="7"></circle><text x="${p.x}" y="${p.y + 20}">${escapeXml(name)}</text></g>`;
+  });
+
+  worldGraphEl.innerHTML = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">${edges}${nodes}</svg>`;
+}
+
+// ---------------------------------------------------------------------------
+// Scene + streaming text + image + motion rendering
+// ---------------------------------------------------------------------------
+function renderSceneSkeleton(sceneNumber){
+  let div = document.getElementById(`scene-${sceneNumber}`);
+  if (div) return div;
+  div = document.createElement('div');
+  div.className = 'scene';
+  div.id = `scene-${sceneNumber}`;
+  div.innerHTML = `
+    <div class="slug">Scene ${sceneNumber} — writing…</div>
+    <p class="scene-text-stream" id="stream-${sceneNumber}"><span class="cursor"></span></p>
+    <div class="skeleton-img"></div>
+  `;
+  scenesEl.appendChild(div);
+  return div;
+}
+
+// Appends a streamed prose chunk into the live "typing" paragraph for a
+// scene that's still being written by the Writer agent. Cheap, additive,
+// and safely a no-op if the skeleton isn't there yet (offline mock path
+// never emits these events, so it's simply unused there).
+function appendSceneToken(sceneNumber, token){
+  renderSceneSkeleton(sceneNumber);
+  const streamEl = document.getElementById(`stream-${sceneNumber}`);
+  if (!streamEl) return;
+  const cursor = streamEl.querySelector('.cursor');
+  const textNode = document.createTextNode(token);
+  if (cursor) streamEl.insertBefore(textNode, cursor);
+  else streamEl.appendChild(textNode);
+}
+
+function renderScene(scene){
+  let div = document.getElementById(`scene-${scene.scene}`);
+  if (!div){ div = document.createElement('div'); div.className = 'scene'; div.id = `scene-${scene.scene}`; scenesEl.appendChild(div); }
+  const isFallback = !!scene.fallback || /Writer agent hit a/.test(scene.text || '');
+  div.innerHTML = `
+    <div class="slug">Scene ${scene.scene} — ${scene.title}${isFallback ? '<span class="warn">writer fallback used</span>' : ''}</div>
+    <p class="scene-text">${scene.text.trim()}</p>
+    <div class="image-prompt"><b>Image prompt</b> ${scene.image_prompt}</div>
+    <div class="scene-image" id="img-${scene.scene}">
+      <div class="skeleton-img"></div>
+    </div>
+    <div class="scene-tools">
+      <button type="button" class="ghost small" data-tts="${scene.scene}">▶ Read aloud</button>
+      <button type="button" class="ghost small" data-dlimg="${scene.scene}" style="display:none">Download image</button>
+      <button type="button" class="ghost small" data-retryimg="${scene.scene}" style="display:none">Retry image</button>
+    </div>
+  `;
+  wireSceneTools(scene.scene, scene.text);
+  scenesCompleted = Math.max(scenesCompleted, scene.scene);
+  updateProgress();
+}
+
+function wireSceneTools(sceneNumber, text){
+  const ttsBtn = scenesEl.querySelector(`[data-tts="${sceneNumber}"]`);
+  if (ttsBtn) ttsBtn.addEventListener('click', () => toggleTTS(sceneNumber, text, ttsBtn));
+}
+
+let currentUtterance = null;
+function toggleTTS(sceneNumber, text, btn){
+  if (!('speechSynthesis' in window)){ btn.disabled = true; btn.textContent = 'TTS unavailable'; return; }
+  if (currentUtterance && speechSynthesis.speaking){
+    speechSynthesis.cancel();
+    btn.textContent = '▶ Read aloud';
+    currentUtterance = null;
+    return;
+  }
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.onend = () => { btn.textContent = '▶ Read aloud'; currentUtterance = null; };
+  currentUtterance = utter;
+  btn.textContent = '■ Stop';
+  speechSynthesis.speak(utter);
+}
+
+function renderImage(sceneNumber, dataUri, promptForRetry){
+  const slot = document.getElementById(`img-${sceneNumber}`);
+  if (!slot) return;
+  slot.innerHTML = dataUri
+    ? `<div class="kenburns-frame"><img id="frame-${sceneNumber}" src="${dataUri}" alt="Illustration for scene ${sceneNumber}" /></div>`
+    : `<span class="world-empty">no image for this scene (artist backend off, or the call failed)</span>`;
+
+  const dlBtn = scenesEl.querySelector(`[data-dlimg="${sceneNumber}"]`);
+  const retryBtn = scenesEl.querySelector(`[data-retryimg="${sceneNumber}"]`);
+  if (dataUri){
+    if (dlBtn){
+      dlBtn.style.display = '';
+      dlBtn.onclick = () => downloadDataUri(dataUri, `narraflow-scene-${sceneNumber}.png`);
+    }
+    if (retryBtn) retryBtn.style.display = 'none';
+  } else {
+    if (dlBtn) dlBtn.style.display = 'none';
+    if (retryBtn && promptForRetry){
+      retryBtn.style.display = '';
+      retryBtn.onclick = () => retryImage(sceneNumber, promptForRetry, retryBtn);
+    }
+  }
+}
+
+async function retryImage(sceneNumber, prompt, btn){
+  btn.disabled = true;
+  btn.textContent = 'Retrying…';
+  try {
+    const res = await fetch(`${API_BASE}/scene/regenerate-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await res.json();
+    renderImage(sceneNumber, data.image, prompt);
+    logLine(`Artist → retried image for scene ${sceneNumber}: ${data.image ? 'success' : 'still failed'}`);
+  } catch (err) {
+    logLine(`Artist → retry failed for scene ${sceneNumber} (backend unreachable)`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Retry image';
+  }
+}
+
+function downloadDataUri(dataUri, filename){
+  const a = document.createElement('a');
+  a.href = dataUri;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+const PAN_TRANSFORMS = {
+  'left-to-right':  { from: 'translateX(-4%)',  to: 'translateX(4%)'  },
+  'right-to-left':  { from: 'translateX(4%)',   to: 'translateX(-4%)' },
+  'top-to-bottom':  { from: 'translateY(-4%)',  to: 'translateY(4%)'  },
+  'bottom-to-top':  { from: 'translateY(4%)',   to: 'translateY(-4%)' },
+  'center-out':     { from: 'translate(0,0)',   to: 'translate(0,0)'  },
+  'center-in':      { from: 'translate(0,0)',   to: 'translate(0,0)'  },
+};
+
+function renderMotion(sceneNumber, motion){
+  const frame = document.getElementById(`frame-${sceneNumber}`);
+  if (!frame || !motion) return;
+
+  const pan = PAN_TRANSFORMS[motion.direction] || PAN_TRANSFORMS['center-out'];
+  const styleId = `motion-style-${sceneNumber}`;
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    @keyframes kenburns-${sceneNumber} {
+      0%   { transform: ${pan.from} scale(${motion.zoom_start}); }
+      100% { transform: ${pan.to} scale(${motion.zoom_end}); }
+    }
+  `;
+  document.head.appendChild(style);
+  frame.style.animation = `kenburns-${sceneNumber} ${motion.duration_ms}ms ease-in-out forwards`;
+
+  if (motion.backend === 'fireworks' && motion.video){
+    const parent = frame.parentElement;
+    parent.innerHTML = `<video src="${motion.video}" autoplay loop muted playsinline></video><span class="video-badge">fireworks video</span>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Export: copy / markdown / PDF (print) / images
+// ---------------------------------------------------------------------------
+function buildStoryText(){
+  const scenes = Array.from(scenesEl.querySelectorAll('.scene'));
+  if (!scenes.length) return '';
+  let out = `${planTitle.textContent || 'Untitled Story'}\n${planMeta.textContent}\n\n`;
+  scenes.forEach(s => {
+    const slug = s.querySelector('.slug');
+    const textEl = s.querySelector('.scene-text');
+    if (!slug || !textEl) return;
+    out += `${slug.textContent}\n${textEl.textContent}\n\n`;
+  });
+  return out.trim();
+}
+
+function buildStoryMarkdown(){
+  const scenes = Array.from(scenesEl.querySelectorAll('.scene'));
+  if (!scenes.length) return '';
+  let out = `# ${planTitle.textContent || 'Untitled Story'}\n\n_${planMeta.textContent}_\n\n`;
+  scenes.forEach(s => {
+    const slug = s.querySelector('.slug');
+    const textEl = s.querySelector('.scene-text');
+    if (!slug || !textEl) return;
+    out += `## ${slug.textContent.replace(/writer fallback used/,'').trim()}\n\n${textEl.textContent}\n\n`;
+  });
+  out += `\n---\n*Generated by NarraFlow — Director → Writer → Memory → Artist → Cinematographer*\n`;
+  return out;
+}
+
+copyBtn.addEventListener('click', async () => {
+  const text = buildStoryText();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy Story'; }, 1500);
+  } catch (err) { /* clipboard API unavailable in some contexts */ }
+});
+
+mdBtn.addEventListener('click', () => {
+  const md = buildStoryMarkdown();
+  if (!md) return;
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  downloadDataUri(url, 'narraflow-story.md');
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+});
+
+pdfBtn.addEventListener('click', () => {
+  const md = buildStoryMarkdown();
+  if (!md) return;
+  const w = window.open('', '_blank');
+  if (!w) return;
+  const escaped = md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  w.document.write(`<!DOCTYPE html><html><head><title>NarraFlow Story</title>
+    <style>body{font-family:Georgia,serif;max-width:680px;margin:40px auto;padding:0 20px;line-height:1.6;white-space:pre-wrap;}</style>
+    </head><body>${escaped}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+});
+
+imgBtn.addEventListener('click', () => {
+  const imgs = Array.from(scenesEl.querySelectorAll('.kenburns-frame img'));
+  if (!imgs.length) return;
+  imgs.forEach((img, i) => {
+    setTimeout(() => downloadDataUri(img.src, `narraflow-scene-${i + 1}.png`), i * 350);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mock path — used only if the backend is completely unreachable.
+// ---------------------------------------------------------------------------
+const NAME_POOL = ["Amara","Kofi","Sena","Idris","Naledi","Mateo","Lin","Priya","Tomas","Yuki","Zara","Elan"];
+const LEAD_WORDS = new Set(["a","an","the"]);
+
+function extractProperNouns(text){
+  const matches = text.match(/\b[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*\b/g) || [];
+  const seen = new Set(); const out = [];
+  for (const m of matches){
+    if (LEAD_WORDS.has(m.toLowerCase())) continue;
+    if (!seen.has(m)){ seen.add(m); out.push(m); }
+  }
+  return out.filter(m => !out.some(o => o !== m && o.includes(m)));
+}
+function hashStr(s){
+  let h = 0;
+  for (let i = 0; i < s.length; i++){ h = (h * 31 + s.charCodeAt(i)) | 0; }
+  return Math.abs(h);
+}
+
+async function timedStep(agent, scene, minMs, maxMs){
+  setAgentActive(agent);
+  const t0 = performance.now();
+  await sleep(minMs + Math.random() * (maxMs - minMs));
+  const ms = Math.round(performance.now() - t0);
+  setAgentTiming(agent, ms);
+  logLine(`${agent[0].toUpperCase()}${agent.slice(1)}${scene ? ` → scene ${scene}` : ''} finished (${ms}ms, simulated — backend offline)`);
+  return ms;
+}
+
+async function runMock(idea, sceneCount, genre){
+  const genres = genre ? [genre] : ["Adventure","Mystery","Sci-Fi","Fantasy","Drama"];
+  const arc = ["setup","rising","twist","climax","resolution"].slice(0, sceneCount);
+  while (arc.length < sceneCount) arc.push('rising');
+  const pickedGenre = genres[Math.floor(Math.random() * genres.length)];
+
+  const protagonist = NAME_POOL[hashStr(idea) % NAME_POOL.length];
+  const remainingLocations = extractProperNouns(idea);
+  let introducedProtagonist = false;
+  totalScenes = arc.length;
+
+  await timedStep('director', null, 300, 600);
+  planTitle.textContent = idea.split(' ').slice(0, 4).join(' ');
+  planMeta.textContent = `${pickedGenre} · ${arc.length} scenes`;
+  planEl.classList.add('show');
+  logLine(`Director → plan ready: "${planTitle.textContent}" (${pickedGenre})`);
+
+  for (let i = 0; i < arc.length; i++){
+    const sceneNumber = i + 1;
+    renderSceneSkeleton(sceneNumber);
+
+    await timedStep('writer', sceneNumber, 400, 900);
+    const charactersIntroduced = introducedProtagonist ? [] : [protagonist];
+    introducedProtagonist = true;
+    let locationsIntroduced = [];
+    if (arc[i] !== 'resolution' && remainingLocations.length){
+      locationsIntroduced = [remainingLocations.shift()];
+    }
+
+    const scene = {
+      scene: sceneNumber,
+      title: arc[i][0].toUpperCase() + arc[i].slice(1),
+      text: `${protagonist} — ${arc[i] === 'twist' ? 'something unexpected' : 'something important'} happens as the story moves toward its ${arc[i]}. ${idea}`,
+      image_prompt: `${idea}, scene ${sceneNumber}, cinematic watercolor concept art`,
+      characters_introduced: charactersIntroduced,
+      locations_introduced: locationsIntroduced,
+    };
+
+    await timedStep('memory', sceneNumber, 100, 250);
+    addToWorld(scene);
+    renderScene(scene);
+
+    await timedStep('artist', sceneNumber, 200, 400);
+    renderImage(sceneNumber, null, scene.image_prompt); // no backend reachable
+
+    await timedStep('cinematographer', sceneNumber, 80, 180);
+  }
+  updateStats();
+}
+
+// ---------------------------------------------------------------------------
+// Live path — talks to the real backend over SSE.
+// ---------------------------------------------------------------------------
+async function handleEvent(event){
+  switch (event.type){
+    case 'timing':
+      setAgentTiming(event.agent, event.ms);
+      logLine(`${event.agent[0].toUpperCase()}${event.agent.slice(1)}${event.scene ? ` → scene ${event.scene}` : ''} finished (${event.ms}ms)`);
+      break;
+    case 'agent_start':
+      setAgentActive(event.agent);
+      if (event.agent === 'writer' && event.scene) renderSceneSkeleton(event.scene);
+      break;
+    case 'plan':
+      planTitle.textContent = event.plan.title;
+      planMeta.textContent = `${event.plan.genre} · ${event.plan.tone} · ${event.plan.scenes} scenes`;
+      planEl.classList.add('show');
+      totalScenes = event.plan.scenes || totalScenes;
+      logLine(`Director → plan ready: "${event.plan.title}" (${event.plan.genre}, ${event.plan.tone})`);
+      break;
+    case 'scene_token':
+      appendSceneToken(event.scene, event.token);
+      break;
+    case 'memory_diff':
+      addToWorld({ characters_introduced: event.added_characters, locations_introduced: event.added_locations });
+      break;
+    case 'scene':
+      renderScene(event.scene); // replaces the streamed skeleton with the final, structured scene
+      break;
+    case 'image':
+      renderImage(event.scene, event.image, null);
+      const promptEl = document.querySelector(`#scene-${event.scene} .image-prompt`);
+      if (promptEl && !event.image){
+        const promptText = promptEl.textContent.replace(/^Image prompt\s*/, '');
+        renderImage(event.scene, event.image, promptText);
+      }
+      break;
+    case 'motion':
+      renderMotion(event.scene, event.motion);
+      break;
+    case 'done':
+      stopTimer(event.total_ms);
+      logLine(`Pipeline complete — total ${event.total_ms}ms across ${totalScenes} scenes`);
+      updateStats(event.total_ms);
+      break;
+  }
+}
+
+async function runLive(idea, sceneCount, genre, tone, length, imageStyle, cameraStyle){
+  totalScenes = sceneCount;
+  const params = new URLSearchParams({ idea, scenes: sceneCount });
+  if (genre) params.set('genre', genre);
+  if (tone) params.set('tone', tone);
+  if (length) params.set('length', length);
+  if (imageStyle) params.set('image_style', imageStyle);
+  if (cameraStyle) params.set('camera_style', cameraStyle);
+
+  const res = await fetch(`${API_BASE}/story/stream?${params.toString()}`);
+  if (!res.ok) throw new Error(`backend returned ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true){
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop();
+    for (const part of parts){
+      if (!part.startsWith('data: ')) continue;
+      const event = JSON.parse(part.slice(6));
+      await handleEvent(event);
+    }
+  }
+}
+
+goBtn.addEventListener('click', async () => {
+  const idea = ideaInput.value.trim();
+  if (!idea) { ideaInput.focus(); return; }
+  goBtn.disabled = true;
+  emptyEl.style.display = 'none';
+  scenesEl.innerHTML = '';
+  planEl.classList.remove('show');
+  copyBtn.classList.remove('show');
+  mdBtn.classList.remove('show');
+  pdfBtn.classList.remove('show');
+  imgBtn.classList.remove('show');
+  resetPipeline();
+  resetWorld();
+  resetLog();
+  statsBarEl.classList.remove('show');
+  scenesCompleted = 0;
+  startTimer();
+
+  const sceneCount = parseInt(scenesRange.value, 10);
+  const genre = genreSel.value;
+  const tone = toneSel.value;
+  const length = lengthSel.value;
+  const imageStyle = imgStyleSel.value;
+  const cameraStyle = camStyleSel.value;
+
+  try {
+    await runLive(idea, sceneCount, genre, tone, length, imageStyle, cameraStyle);
+  } catch (err){
+    logLine(`Live backend unavailable (${err.message}) — switching to local demo mode.`);
+    await runMock(idea, sceneCount, genre);
+    stopTimer();
+  }
+  if (scenesEl.children.length){
+    copyBtn.classList.add('show');
+    mdBtn.classList.add('show');
+    pdfBtn.classList.add('show');
+    imgBtn.classList.add('show');
+  }
+  goBtn.disabled = false;
+});
+
+ideaInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !goBtn.disabled) goBtn.click();
+});
+</script>
+</body>
+</html>

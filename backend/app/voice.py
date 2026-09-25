@@ -18,10 +18,9 @@ file is only ever involved in one of them:
      support (Firefox, some iOS Safari versions) or the mic permission
      flow fails, the frontend records a short clip with MediaRecorder
      and POSTs it to /voice/transcribe, which calls this module. Uses
-     Fireworks' hosted Whisper-v3 endpoint - the same AMD Instinct
-     MI300X-served infrastructure as the Writer and Artist agents - so
-     the whole voice-to-video path stays inside AMD/Fireworks with no
-     third-party STT provider involved.
+     Fireworks' hosted Whisper-v3 endpoint, the same provider as the
+     Writer and Artist agents. (The new voice studio does not use this
+     module: it uses the AssemblyAI Voice Agent API.)
 
 Set VOICE_BACKEND=fireworks + FIREWORKS_API_KEY to turn on the fallback:
 

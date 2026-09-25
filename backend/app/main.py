@@ -22,6 +22,7 @@ Web Speech API support, and a scene-level image retry endpoint.
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 from threading import Lock
 from typing import Dict, Optional
 
@@ -33,20 +34,29 @@ from pydantic import BaseModel
 
 from . import artist, cinematographer, narrator, storage, voice, writer
 from .orchestrator import generate_story, generate_story_stream
+from .studio.routes import router as studio_router
 
-app = FastAPI(title="NarraFlow")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    storage.init_db()
+    yield
 
+
+app = FastAPI(title="NarraFlow", lifespan=_lifespan)
+
+# CORS_ORIGINS="https://your-site.example,https://other.example" locks this down in
+# production; the default stays open so local development just works.
+_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Voice-first illustrated storytelling (AssemblyAI Voice Agent API): /api/*
+app.include_router(studio_router)
 
-@app.on_event("startup")
-def _startup() -> None:
-    storage.init_db()
 
 
 @app.get("/")
@@ -59,7 +69,7 @@ def status():
         "artist_backend": artist.ARTIST_BACKEND,
         "voice_backend": voice.VOICE_BACKEND,
         "cinematographer_backend": cinematographer.CINEMATOGRAPHER_BACKEND,
-        "gpu": "AMD Instinct MI300X (via Fireworks AI)",
+        "gpu": "hosted inference (Fireworks AI)",
     }
 
 
@@ -322,6 +332,8 @@ def get_narration_audio(story_id: str):
     return FileResponse(story["audio_path"], media_type="audio/webm")
 
 
-# Serves the demo UI at /app/ - matches the Dockerfile's documented
-# `http://localhost:8000/app/` entry point.
-app.mount("/app", StaticFiles(directory="../frontend", html=True), name="frontend")
+# Serves the UI at /app/ (the voice storytelling studio) and the original
+# multi-agent pipeline demo at /app/classic.html. Resolved relative to this file
+# so it works no matter which directory uvicorn is started from.
+_FRONTEND = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "frontend")
+app.mount("/app", StaticFiles(directory=_FRONTEND, html=True), name="frontend")

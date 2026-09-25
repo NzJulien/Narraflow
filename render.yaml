@@ -1,0 +1,15 @@
+# Render blueprint (https://render.com/docs/blueprint-spec). Docker, because the app needs ffmpeg,
+# background threads and a persistent disk; it is not a good fit for serverless (e.g. Vercel functions).
+services:
+  - type: web
+    name: narraflow
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk: { name: narraflow-data, mountPath: /data, sizeGB: 5 }
+    envVars:
+      - { key: ASSEMBLYAI_API_KEY, sync: false }   # set in the dashboard, never in git
+      - { key: FIREWORKS_API_KEY, sync: false }
+      - { key: IMAGE_PROVIDER, value: illustrator } # switch to "fireworks" once the key above is set
+      - { key: TRUST_PROXY, value: "true" }
+      - { key: CORS_ORIGINS, sync: false }          # e.g. https://narraflow.onrender.com

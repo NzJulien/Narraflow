@@ -1,0 +1,19 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: pip install -r backend/requirements-dev.txt
+      - run: ruff check backend --select E,F,W,B --ignore E501,B008
+      - run: node --test frontend/studio/tests/protocol.test.mjs frontend/studio/tests/player.test.mjs
+      - run: cd backend && python -m pytest tests -q -W ignore --ignore=tests/test_e2e_browser.py
+      # Browser e2e (real Chrome + fake AssemblyAI) runs where Chrome is installed:
+      - run: cd backend && python -m pytest tests/test_e2e_browser.py -q -W ignore
+        continue-on-error: true
