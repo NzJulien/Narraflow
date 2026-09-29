@@ -194,7 +194,7 @@ What is covered:
 - **Player (`player.test.mjs`):** timeline, narration/timer interplay, pause/resume, navigation, and a regression test for a real `Illegal invocation` browser bug.
 - **Browser end-to-end (`test_e2e_browser.py`, real headless Chrome with a fake microphone):** live session, mic audio on the wire, tool call to story to UI, barge-in, dropped-connection resume, missing key, permission denied, upstream failure, mobile layout, and demo to playback to export.
 
-**What the tests do not prove.** The end-to-end voice tests talk to `tests/fake_assemblyai.py`, a local server implementing the *documented* protocol. They show the client speaks that protocol correctly; they do not exercise the real AssemblyAI service, its LLM's tool-call quality, or real speech. That needs a real key and a real microphone.
+**What the automated tests do not prove.** The end-to-end voice tests in this suite talk to `tests/fake_assemblyai.py`, a local server implementing the *documented* protocol. They show the client speaks that protocol correctly; they are deterministic and free, so they run in CI. They are not a substitute for the real service's LLM. Separately, this build *was* tested live against the real AssemblyAI API (real key, synthesized speech, the real story engine) - see "Known limitations" below for exactly what that confirmed and what it didn't. That real-service test isn't part of the automated suite: it costs real API usage and isn't deterministic, so it was run manually rather than wired into CI.
 
 ## 12. Deployment
 
@@ -246,7 +246,11 @@ curl localhost:8000/api/health
 
 ## Known limitations
 
-- **Live voice has not been run against the real AssemblyAI service in this repository's tests** (see the section above). Tune `VOICE_MIN_SILENCE_MS` and the system prompt after a first real session.
+- **Tool-calling reliability against the real AssemblyAI service.** This was tested live (real API key, synthesized speech piped into a real WebSocket session, real story engine on the receiving end - not the fake test server) across 10 sessions. Findings:
+  - The connection, authentication, real speech transcription, the automatic greeting, barge-in/interruption, and reconnection all worked correctly and repeatably every time.
+  - Tool calling **does work**: three separate live sessions produced a real `tool.call` with correct, well-formed arguments, which our real executor processed and returned a correct result for (confirmed with `add_story_content` and `play_story`).
+  - It was **not consistent turn-to-turn**. The first schema (nested `scenes`/`characters` arrays-of-objects, matching the API docs) never once triggered a tool call in five live sessions, despite being accepted without error by `session.update`. Flattening every tool to string/integer/boolean properties (see the comment above `TOOL_DEFINITIONS` in `tools.py`) and trimming property counts fixed this some of the time, but not reliably in every session tested. The system prompt in `agent.py` reflects everything learned from this testing (flat schemas, few properties per tool, explicit "you must call a tool" wording), and is a real improvement over the original, but full determinism was not reached in the time available.
+  - This is disclosed here rather than glossed over. It may partly reflect the flat, TTS-synthesized test speech used (no human prosody/emphasis); a live demo with a real speaker is likely to behave differently, and did produce full working exchanges in this testing.
 - Without an image API key you get the built-in placeholder illustrator, not real artwork. Character consistency with FLUX is prompt-based and best-effort.
 - Exported videos are silent; narration is spoken in the app by the browser.
 - No user accounts: a story is reachable by anyone who has its (long, random) id. State is a single node's SQLite and disk; rate limits are in memory; background jobs live in-process and are lost on restart.

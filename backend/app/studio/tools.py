@@ -202,9 +202,40 @@ def create_story(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True, "story_id": story.id, "new_story": not is_blank, "outline": _outline(story)}
 
 
+def _flat_character(a: Dict[str, Any], prefix: str = "new_character_") -> Optional[Dict[str, Any]]:
+    """Build a single-character dict from flat `new_character_*` args, if a name was given.
+
+    The voice-facing tool schema exposes only flat string fields (no nested objects or
+    arrays-of-objects): AssemblyAI's Voice Agent tool calling was tested live and reliably
+    calls tools with flat schemas, but silently never calls tools whose parameters contain
+    array-of-object fields (confirmed by isolating the variable across several real sessions -
+    see README "Known limitations"). Internally we still work with dicts, so this adapts the
+    flat wire format to the existing `_upsert_character` shape.
+    """
+    name = _s(a.get(f"{prefix}name"))
+    if not name:
+        return None
+    return {"name": name, "age": a.get(f"{prefix}age"), "appearance": a.get(f"{prefix}appearance"),
+            "clothing": a.get(f"{prefix}clothing"), "description": a.get(f"{prefix}description")}
+
+
+def _flat_scene(a: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    narration = _s(a.get("narration_text") or a.get("narration"))
+    if not (narration or _s(a.get("visual_prompt"))):
+        return None
+    return {"narration": narration, "summary": a.get("summary"), "setting": a.get("setting"),
+            "characters": a.get("characters"), "emotion": a.get("emotion"), "visual_prompt": a.get("visual_prompt")}
+
+
 def add_story_content(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
     narration = _s(a.get("narration_text"))
-    raw_scenes = a.get("scenes") or []
+    # Two argument shapes are accepted: the flat one the real voice agent sends (one scene +
+    # at most one new character per call - see _flat_scene/_flat_character), and the richer
+    # array-of-objects shape used internally by the scripted demo and tests.
+    raw_scenes = list(a.get("scenes") or [])
+    flat_scene = _flat_scene(a)
+    if flat_scene and not raw_scenes:
+        raw_scenes = [flat_scene]
     if not narration and not raw_scenes:
         raise ToolError("I didn't catch any story content to add.")
     added: List[int] = []
@@ -217,9 +248,14 @@ def add_story_content(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
         for raw in a.get("characters") or []:
             if isinstance(raw, dict):
                 _upsert_character(s, raw)
+        flat_char = _flat_character(a)
+        if flat_char:
+            _upsert_character(s, flat_char)
         for raw in a.get("locations") or []:
             if isinstance(raw, dict):
                 _upsert_location(s, raw)
+        if _s(a.get("setting")) and not s.location(_s(a.get("setting"))):
+            _upsert_location(s, {"name": a.get("setting"), "description": a.get("setting_description")})
         scene_dicts = [r for r in raw_scenes if isinstance(r, dict)]
         if not scene_dicts and narration:  # the agent gave prose but no scene split: keep the words
             scene_dicts = [{"narration": narration, "summary": narration.split(". ")[0][:120]}]
@@ -251,18 +287,32 @@ def analyze_story(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
     details, retag a scene's setting/characters). It never adds or deletes scenes."""
     changed: List[str] = []
     before: set = set()
+    # Flat single-item fields (scene_number + fields, or character_name + fields) are what the
+    # real voice agent sends; array-of-objects is still accepted for internal/test callers.
+    flat_char = _flat_character(a, prefix="character_") if a.get("character_name") else None
+    flat_scene_edit = (
+        {"scene_number": a.get("scene_number"), "summary": a.get("summary"), "setting": a.get("setting"),
+         "characters": a.get("characters"), "actions": a.get("actions"), "emotion": a.get("emotion"),
+         "visual_prompt": a.get("visual_prompt")}
+        if a.get("scene_number") not in (None, "") else None
+    )
 
     def mutate(s: Story) -> None:
         before.update(c.id for c in s.characters)
         for raw in a.get("characters") or []:
             if isinstance(raw, dict) and (c := _upsert_character(s, raw)):
                 changed.append(c.name)
+        if flat_char and (c := _upsert_character(s, flat_char)):
+            changed.append(c.name)
         for raw in a.get("locations") or []:
             if isinstance(raw, dict):
                 _upsert_location(s, raw)
-        for raw in a.get("scenes") or []:
-            if not isinstance(raw, dict):
-                continue
+        if _s(a.get("location_name")):
+            _upsert_location(s, {"name": a.get("location_name"), "description": a.get("location_description")})
+        scene_edits = [r for r in (a.get("scenes") or []) if isinstance(r, dict)]
+        if flat_scene_edit:
+            scene_edits.append(flat_scene_edit)
+        for raw in scene_edits:
             sc = _need_scene(s, raw.get("scene_number"))
             for field, conv in (("summary", _s), ("setting", _s), ("emotion", _s), ("visual_prompt", _s),
                                 ("characters", _list), ("actions", _list)):
@@ -311,7 +361,13 @@ def regenerate_scene(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
 
 def modify_character(story_id: str, a: Dict[str, Any]) -> Dict[str, Any]:
     name = _s(a.get("character_name") or a.get("character_id"))
-    changes = a.get("changes") if isinstance(a.get("changes"), dict) else {}
+    # Flat top-level fields are what the real voice agent sends (see add_story_content's
+    # docstring on why nested objects don't reliably trigger tool calls); a nested `changes`
+    # dict is still accepted for internal/test callers.
+    changes = dict(a.get("changes")) if isinstance(a.get("changes"), dict) else {}
+    for field in ("name", "description", "age", "appearance", "clothing", "add_traits", "remove_traits"):
+        if a.get(field) not in (None, "") and field not in changes:
+            changes[field] = a[field]
     if not name:
         raise ToolError("Which character should I change?")
     if not changes:
@@ -492,42 +548,41 @@ def execute(name: str, story_id: str, arguments: Any) -> Dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 # JSON-schema definitions (AssemblyAI Voice Agent API tool format)
+#
+# IMPORTANT - every parameter here is flat (string/integer/boolean; a "list" is a
+# comma-separated string, e.g. "Amara, Kito"). No property is `type: array` with
+# object items, and no property is a nested `type: object`.
+#
+# This was NOT a style choice - it was found through live testing against the real
+# AssemblyAI Voice Agent API. An earlier version of this schema used nested
+# array-of-object fields (e.g. `scenes: [{narration, summary, ...}]`,
+# `characters: [{name, age, appearance, ...}]`). session.update accepted it without
+# error, but the agent's LLM then NEVER called a tool that had such a field, across
+# several full real voice sessions (see backend/tests/ - the fake AssemblyAI server
+# can't reproduce this, since it doesn't run a real model). Swapping only the
+# nested fields for flat ones, with the exact same system prompt, made tool calls
+# fire reliably. The practical implication: `add_story_content` now describes ONE
+# scene (and at most one new/changed character) per call; the system prompt tells
+# the agent to call it again for each further scene in the same turn.
 # ---------------------------------------------------------------------------
-_CHARACTER = {
-    "type": "object",
-    "description": "A character. Always fill appearance and clothing with concrete visual details so every illustration matches.",
-    "properties": {
-        "name": {"type": "string"},
-        "description": {"type": "string", "description": "Who they are, e.g. 'a curious young girl'."},
-        "age": {"type": "string", "description": "e.g. 'about 8'."},
-        "appearance": {"type": "string", "description": "Skin, hair, build, e.g. 'dark skin, long black braids'."},
-        "clothing": {"type": "string", "description": "Outfit and accessories with colours, e.g. 'blue dress, brown sandals, yellow bracelet'."},
-    },
-    "required": ["name"],
-}
-_LOCATION = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-        "description": {"type": "string"},
-        "visual_traits": {"type": "array", "items": {"type": "string"}, "description": "Concrete visuals, e.g. ['stone huts', 'misty mountains']."},
-    },
-    "required": ["name"],
-}
-_SCENE = {
-    "type": "object",
-    "properties": {
-        "narration": {"type": "string", "description": "The storyteller's own words for this scene, lightly cleaned up. Do not invent."},
-        "summary": {"type": "string", "description": "One short sentence."},
-        "setting": {"type": "string", "description": "Location name."},
-        "characters": {"type": "array", "items": {"type": "string"}, "description": "Names of characters visible in the scene."},
-        "actions": {"type": "array", "items": {"type": "string"}},
-        "emotion": {"type": "string"},
-        "visual_prompt": {"type": "string", "description": "What the illustration should show: composition, lighting, key objects."},
-    },
-    "required": ["narration", "summary", "visual_prompt"],
-}
 _N = {"type": "integer", "description": "Scene number as the user says it (1 = first scene)."}
+
+
+def _char_fields(prefix: str) -> Dict[str, Any]:
+    return {
+        f"{prefix}name": {"type": "string", "description": "Character's name."},
+        f"{prefix}age": {"type": "string", "description": "e.g. 'about 8'."},
+        f"{prefix}appearance": {"type": "string", "description": "Skin, hair, build, e.g. 'dark skin, long black braids'."},
+        f"{prefix}clothing": {"type": "string", "description": "Outfit and accessories with colours, e.g. 'blue dress, brown sandals, yellow bracelet'."},
+        f"{prefix}description": {"type": "string", "description": "Who they are, e.g. 'a curious young girl'."},
+    }
+_SCENE_FIELDS = {
+    "summary": {"type": "string", "description": "One short sentence."},
+    "setting": {"type": "string", "description": "Location name."},
+    "characters": {"type": "string", "description": "Comma-separated names of characters visible in this scene, e.g. 'Amara, Kito'."},
+    "emotion": {"type": "string"},
+    "visual_prompt": {"type": "string", "description": "What the illustration should show: composition, lighting, key objects."},
+}
 
 
 def _fn(name: str, description: str, properties: Dict[str, Any], required: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -540,42 +595,46 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         {"title": {"type": "string"}, "genre": {"type": "string"}, "tone": {"type": "string"},
          "visual_style": {"type": "string", "description": "e.g. 'soft watercolour picture book'."},
          "language": {"type": "string", "description": "Language code, e.g. 'en'."}}),
+    # Deliberately few properties (4): live testing against the real AssemblyAI Voice Agent
+    # API showed tool-call reliability drop sharply as a tool's property count grew, even with
+    # every property flat - see the schema-flatness note above. Anything not essential to
+    # "record what was just said" (title, emotion, a summary, new-character visual details) is
+    # either derived server-side (_build_scene falls back to narration_text for the summary) or
+    # moved to a later, separate modify_character call once the user actually describes a look.
     _fn("add_story_content",
-        "Record NEW story narration the user just spoke and split it into structured scenes. Call this every time the user narrates story content (not for instructions). New scenes are illustrated automatically.",
-        {"narration_text": {"type": "string", "description": "The narration just spoken."},
-         "title": {"type": "string", "description": "A title if one is obvious and the story has none."},
-         "characters": {"type": "array", "items": _CHARACTER},
-         "locations": {"type": "array", "items": _LOCATION},
-         "scenes": {"type": "array", "items": _SCENE, "description": "One entry per distinct visual moment."},
-         "auto_generate": {"type": "boolean"}},
-        ["narration_text", "scenes"]),
-    _fn("analyze_story", "Refine the structure of the existing story: correct character or location details, or re-tag an existing scene's setting/characters/visuals. Never adds or removes scenes.",
-        {"characters": {"type": "array", "items": _CHARACTER}, "locations": {"type": "array", "items": _LOCATION},
-         "scenes": {"type": "array", "items": {"type": "object", "properties": {
-             "scene_number": _N, "summary": {"type": "string"}, "setting": {"type": "string"},
-             "characters": {"type": "array", "items": {"type": "string"}}, "actions": {"type": "array", "items": {"type": "string"}},
-             "emotion": {"type": "string"}, "visual_prompt": {"type": "string"}}, "required": ["scene_number"]}}}),
+        "Record ONE scene of narration the user just spoke, so it gets illustrated. Call every time the user narrates new story content (not for instructions). "
+        "Covers more than one scene? Call this again, once per scene.",
+        {"narration_text": {"type": "string", "description": "This scene's narration, in the storyteller's own words, lightly cleaned up. Do not invent."},
+         "visual_prompt": {"type": "string", "description": "What the illustration should show: characters present, setting, action, mood."},
+         "setting": {"type": "string", "description": "Location name."},
+         "characters": {"type": "string", "description": "Comma-separated character names in this scene, e.g. 'Amara, Kito'."}},
+        ["narration_text", "visual_prompt"]),
+    _fn("analyze_story", "Refine the structure of the existing story: correct one character's or one location's details, or re-tag one existing scene's setting/characters/visuals. Never adds or removes scenes.",
+        {**_char_fields("character_"), "location_name": {"type": "string"}, "location_description": {"type": "string"},
+         "scene_number": _N, **_SCENE_FIELDS}),
     _fn("generate_scene", "Illustrate a scene that has no illustration yet or failed. Skips scenes already illustrated unless force is true.",
         {"scene_number": _N, "visual_prompt": {"type": "string"}, "force": {"type": "boolean"}}, ["scene_number"]),
     _fn("regenerate_scene", "Repaint an existing scene after the user asks for a change to it.",
         {"scene_number": _N, "revision_instruction": {"type": "string", "description": "What to change, e.g. 'make the tree blue and more magical'."}},
         ["scene_number", "revision_instruction"]),
-    _fn("modify_character", "Change a character's persistent look (age, hair, clothing, name...). Every scene they appear in is repainted to match.",
-        {"character_name": {"type": "string"},
-         "changes": {"type": "object", "properties": {
-             "name": {"type": "string"}, "description": {"type": "string"}, "age": {"type": "string"},
-             "appearance": {"type": "string", "description": "Full updated appearance (replaces the old one)."},
-             "clothing": {"type": "string", "description": "Full updated outfit (replaces the old one)."},
-             "add_traits": {"type": "array", "items": {"type": "string"}},
-             "remove_traits": {"type": "array", "items": {"type": "string"}}}}},
-        ["character_name", "changes"]),
+    # Kept to 4 properties for the same reliability reason as add_story_content above. Renaming
+    # a character, and adding/removing one trait at a time, are rarer edits - modify_character's
+    # executor still accepts `name`/`add_traits`/`remove_traits` for internal/test callers (see
+    # tools.py), they are just not offered to the live voice agent.
+    _fn("modify_character", "Change a character's persistent look. Every scene they appear in is repainted to match.",
+        {"character_name": {"type": "string", "description": "Their current name."},
+         "age": {"type": "string"},
+         "appearance": {"type": "string", "description": "Full updated appearance (replaces the old one), e.g. 'dark skin, long black braids'."},
+         "clothing": {"type": "string", "description": "Full updated outfit (replaces the old one), e.g. 'green dress, brown sandals'."}},
+        ["character_name"]),
     _fn("modify_story_style", "Change the visual style or tone of the whole story, e.g. 'more mysterious'. All scenes are repainted.",
         {"visual_style": {"type": "string", "description": "Replace the style entirely."},
          "style_changes": {"type": "string", "description": "Add to the current style, e.g. 'misty, mysterious lighting'."},
          "tone": {"type": "string"}, "genre": {"type": "string"}}),
-    _fn("add_scene", "Insert a new scene, at the end unless a position is given.",
-        {**_SCENE["properties"], "position": {"type": "integer", "description": "Where it goes (1 = first). Omit for the end."}},
-        ["narration"]),
+    _fn("add_scene", "Insert one new scene, at the end unless a position is given.",
+        {"narration": {"type": "string", "description": "This scene's narration, in the storyteller's own words."},
+         **_SCENE_FIELDS, "position": {"type": "integer", "description": "Where it goes (1 = first). Omit for the end."}},
+        ["narration", "visual_prompt"]),
     _fn("remove_scene", "Delete a scene. ALWAYS ask the user to confirm first, then call with confirmed=true.",
         {"scene_number": _N, "confirmed": {"type": "boolean"}}, ["scene_number"]),
     _fn("reorder_scene", "Move a scene to a new position.", {"scene_number": _N, "new_position": {"type": "integer"}},
