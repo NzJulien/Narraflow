@@ -208,7 +208,11 @@ curl localhost:8000/api/health
 
 `render.yaml` is a ready Render blueprint (Docker, `/api/health` check, 5 GB disk, secrets set in the dashboard). Set `TRUST_PROXY=true` and `CORS_ORIGINS=<your https origin>`; voice requires an https origin.
 
-**Verified locally:** the image builds, runs as a non-root user, reports healthy, generates the demo story and exports a valid MP4. **Not verified:** any hosted deployment; none has been made. Deploying needs your hosting account and keys.
+**Live deployment.** This exact code (same `main`, unmodified) is deployed to a [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox) - a real, persistent VM, not a serverless function, since the app needs ffmpeg, background threads and a writable disk. Verified against the live public URL with a real browser: landing page, the full scripted demo (5 scenes, 2 characters, real illustrations), a valid exported MP4, and `POST /api/voice/session` minting a real AssemblyAI token. A live voice session (real synthesized speech, real transcription shown in the UI) was also captured on this deployment.
+
+**Duration caveat.** Vercel Sandboxes on the Hobby plan cap continuous uptime at 45 minutes per session; the underlying account is Hobby. A Pro plan (or a different always-on host, using the same Docker image via `render.yaml`) removes that cap - that's a hosting/billing decision for the project owner, not something this build can make on its own. The sandbox can be resumed on demand from its snapshot before a demo.
+
+**Verified locally, independent of the above:** the Docker image builds, runs as a non-root user, reports healthy, generates the demo story and exports a valid MP4.
 
 ## 13. Demo instructions
 
