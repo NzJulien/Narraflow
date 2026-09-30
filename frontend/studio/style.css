@@ -60,8 +60,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: var(--shadow), 0 0 0 1px rgba(255,255,255,.02) inset; isolation: isolate; }
 .canvas img.scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .canvas img.scene.kb { animation: kb var(--kb-dur, 8s) ease-in-out forwards; transform-origin: var(--kb-origin, 50% 50%); }
-.canvas img.scene.reveal { animation: reveal .7s ease both; }
-@keyframes reveal { from { opacity: 0; transform: scale(1.03); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.canvas img.scene.reveal { animation: reveal .7s ease both; will-change: opacity, transform; }
+/* opacity + transform only (no filter/blur): those are cheap, GPU-compositable properties.
+   Animating `filter: blur()` on a full-canvas 1280x720 image forces Chrome to repaint every
+   frame in software on machines/environments without solid GPU compositing, which was stalling
+   the whole tab for several seconds on every scene reveal - easy to mistake for a data/loading bug. */
+@keyframes reveal { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
 @keyframes kb { from { transform: scale(1); } to { transform: scale(var(--kb-to, 1.1)); } }
 .canvas .badge { position: absolute; left: 14px; top: 14px; z-index: 3; padding: 6px 12px; border-radius: 999px; background: rgba(18,15,29,.72);
   border: 1px solid rgba(255,255,255,.12); font-size: .82rem; backdrop-filter: blur(6px); }
@@ -121,7 +125,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .panel > summary { list-style: none; cursor: pointer; padding: 13px 16px; display: flex; align-items: center; gap: 10px; font-weight: 600; user-select: none; }
 .panel > summary::-webkit-details-marker { display: none; }
 .panel > summary .n { margin-left: auto; color: var(--muted); font-weight: 400; font-size: .85rem; }
-.panel > summary::before { content: "▸"; color: var(--amber2); transition: transform .15s; }
+.panel > summary::before { content: "\25b8"; color: var(--amber2); transition: transform .15s; }
 .panel[open] > summary::before { transform: rotate(90deg); }
 .panel .body { padding: 4px 12px 14px; }
 .scene-list { display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow: auto; padding: 2px; }

@@ -237,17 +237,34 @@ function currentScene() { return S.story?.scenes[S.selected] || null; }
 function showScene(scene, kenBurns) {
   const img = $("sceneImg");
   if (!scene || scene.status !== "ready" || !scene.image_url) return;
-  if (img.dataset.src !== scene.image_url || kenBurns) {
-    const fresh = img.cloneNode(false); // restart CSS animations cleanly
-    fresh.id = "sceneImg"; fresh.hidden = false; fresh.dataset.src = scene.image_url; fresh.alt = scene.summary || `Scene ${scene.order}`;
-    fresh.className = "scene";
-    if (!REDUCED) {
-      if (kenBurns) { fresh.classList.add("kb"); fresh.style.setProperty("--kb-dur", `${scene.duration + 2}s`); fresh.style.setProperty("--kb-origin", scene.order % 2 ? "30% 60%" : "70% 40%"); fresh.style.setProperty("--kb-to", scene.order % 3 === 0 ? "1.06" : "1.12"); }
-      else fresh.classList.add("reveal");
+  if (img.dataset.src === scene.image_url && !kenBurns) return;
+  img.dataset.src = scene.image_url;
+  img.alt = scene.summary || `Scene ${scene.order}`;
+
+  const startAnim = () => {
+    img.classList.remove("kb", "reveal");
+    void img.offsetWidth; // force reflow so re-adding the class restarts the CSS animation
+    if (REDUCED) return;
+    if (kenBurns) {
+      img.classList.add("kb");
+      img.style.setProperty("--kb-dur", `${scene.duration + 2}s`);
+      img.style.setProperty("--kb-origin", scene.order % 2 ? "30% 60%" : "70% 40%");
+      img.style.setProperty("--kb-to", scene.order % 3 === 0 ? "1.06" : "1.12");
+    } else {
+      img.classList.add("reveal");
     }
-    fresh.src = scene.image_url;
-    img.replaceWith(fresh);
-  }
+  };
+
+  // Same underlying image already loaded (e.g. just restarting the Ken Burns pan on
+  // replay) - restart the animation immediately, no need to reload the resource.
+  if (img.src === scene.image_url && img.complete) { startAnim(); return; }
+
+  // Swapping to a new image: never detach/replace the <img> element mid-load (that
+  // race is what used to leave the canvas stuck black - the CSS reveal animation
+  // could start, and even finish, before the freshly-inserted node had painted any
+  // pixels). Keep the same element and only start the reveal once it has decoded.
+  img.onload = () => { img.onload = null; startAnim(); };
+  img.src = scene.image_url;
 }
 
 function render() {
